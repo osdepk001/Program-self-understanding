@@ -8,64 +8,67 @@
 
 | 指标 | 数值 |
 |------|------|
-| 总文件数 | 20 |
-| 总代码行 | 2150 |
-| 总依赖关系 | 20 |
+| 总文件数 | 22 |
+| 总代码行 | 2443 |
+| 总依赖关系 | 21 |
 
 ### 架构分层
 
 | 层级 | 文件数 |
 |------|--------|
 | application | 1 |
-| common | 9 |
+| common | 10 |
 | domain | 1 |
-| foundation | 9 |
+| foundation | 10 |
 
 ## 依赖关系图
 
 ```mermaid
 graph TD
     N0["run.py"]
-    N1["src/<br/>main.py"]
-    N2["src/<br/>__init__.py"]
-    N3["src/<br/>analyzer/<br/>incremental_cache.py"]
-    N4["src/<br/>analyzer/<br/>llm_client.py"]
-    N5["src/<br/>analyzer/<br/>rule_engine.py"]
-    N6["src/<br/>analyzer/<br/>__init__.py"]
-    N7["src/<br/>graph/<br/>dependency_graph.py"]
-    N8["src/<br/>graph/<br/>__init__.py"]
-    N9["src/<br/>parser/<br/>generic_parser.py"]
-    N10["src/<br/>parser/<br/>js_parser.py"]
-    N11["src/<br/>parser/<br/>python_parser.py"]
-    N12["src/<br/>parser/<br/>__init__.py"]
-    N13["src/<br/>reporter/<br/>html_reporter.py"]
-    N14["src/<br/>reporter/<br/>json_reporter.py"]
-    N15["src/<br/>reporter/<br/>markdown_reporter.py"]
-    N16["src/<br/>reporter/<br/>__init__.py"]
-    N17["tests/<br/>fixtures/<br/>go/<br/>server.go"]
-    N18["tests/<br/>fixtures/<br/>java/<br/>Application.java"]
-    N19["tests/<br/>fixtures/<br/>rust/<br/>app.rs"]
+    N1["run_gui.py"]
+    N2["src/<br/>gui_app.py"]
+    N3["src/<br/>main.py"]
+    N4["src/<br/>__init__.py"]
+    N5["src/<br/>analyzer/<br/>incremental_cache.py"]
+    N6["src/<br/>analyzer/<br/>llm_client.py"]
+    N7["src/<br/>analyzer/<br/>rule_engine.py"]
+    N8["src/<br/>analyzer/<br/>__init__.py"]
+    N9["src/<br/>graph/<br/>dependency_graph.py"]
+    N10["src/<br/>graph/<br/>__init__.py"]
+    N11["src/<br/>parser/<br/>generic_parser.py"]
+    N12["src/<br/>parser/<br/>js_parser.py"]
+    N13["src/<br/>parser/<br/>python_parser.py"]
+    N14["src/<br/>parser/<br/>__init__.py"]
+    N15["src/<br/>reporter/<br/>html_reporter.py"]
+    N16["src/<br/>reporter/<br/>json_reporter.py"]
+    N17["src/<br/>reporter/<br/>markdown_reporter.py"]
+    N18["src/<br/>reporter/<br/>__init__.py"]
+    N19["tests/<br/>fixtures/<br/>go/<br/>server.go"]
+    N20["tests/<br/>fixtures/<br/>java/<br/>Application.java"]
+    N21["tests/<br/>fixtures/<br/>rust/<br/>app.rs"]
 
-    N0 --> N1
-    N1 --> N3
-    N1 --> N4
-    N1 --> N5
-    N1 --> N7
-    N1 --> N9
-    N1 --> N10
-    N1 --> N11
-    N1 --> N13
-    N1 --> N14
-    N1 --> N15
+    N0 --> N3
+    N1 --> N2
+    N3 --> N5
+    N3 --> N6
     N3 --> N7
-    N4 --> N7
-    N5 --> N7
-    N9 --> N7
-    N10 --> N7
-    N11 --> N7
-    N13 --> N7
-    N14 --> N7
-    N15 --> N7
+    N3 --> N9
+    N3 --> N11
+    N3 --> N12
+    N3 --> N13
+    N3 --> N15
+    N3 --> N16
+    N3 --> N17
+    N5 --> N9
+    N6 --> N9
+    N7 --> N9
+    N11 --> N9
+    N12 --> N9
+    N13 --> N9
+    N15 --> N9
+    N16 --> N9
+    N17 --> N9
 ```
 
 ## 文件详情
@@ -79,6 +82,18 @@ graph TD
 - **分析来源**: static
 
 - **依赖文件**: [`src/main.py`](#srcmainpy)
+
+---
+
+### `run_gui.py`
+
+- **语言**: python
+- **代码行数**: 11
+- **架构层级**: 公共层
+- **功能描述**: 模块文件
+- **分析来源**: static
+
+- **依赖文件**: [`src/gui_app.py`](#srcguiapppy)
 
 ---
 
@@ -166,13 +181,29 @@ graph TD
 
 ---
 
+### `src/gui_app.py`
+
+- **语言**: python
+- **代码行数**: 281
+- **架构层级**: 基础层
+- **功能描述**: 定义类: RedirectText, AnalyzerGUI
+- **分析来源**: static
+
+- **对外导出**: `class:RedirectText`, `class:AnalyzerGUI`, `fn:main`
+
+- **被引用者**: `run_gui.py`
+
+---
+
 ### `src/main.py`
 
 - **语言**: python
-- **代码行数**: 330
+- **代码行数**: 331
 - **架构层级**: 领域层
 - **功能描述**: 定义函数: load_config, scan_files, detect_language ...
 - **分析来源**: static
+
+- **对外导出**: `var:SUPPORTED_EXTENSIONS`, `fn:load_config`, `fn:scan_files`, `fn:detect_language`, `fn:run_analysis`, `fn:generate_reports`, `fn:print_summary`, `fn:print_rule_result`, `fn:main`
 
 - **依赖文件**: [`src/analyzer/incremental_cache.py`](#srcanalyzerincrementalcachepy), [`src/analyzer/llm_client.py`](#srcanalyzerllmclientpy), [`src/analyzer/rule_engine.py`](#srcanalyzerruleenginepy), [`src/graph/dependency_graph.py`](#srcgraphdependencygraphpy), [`src/parser/generic_parser.py`](#srcparsergenericparserpy), [`src/parser/js_parser.py`](#srcparserjsparserpy), [`src/parser/python_parser.py`](#srcparserpythonparserpy), [`src/reporter/html_reporter.py`](#srcreporterhtmlreporterpy) ...（共 10 个）
 

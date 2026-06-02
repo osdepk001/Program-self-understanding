@@ -32,6 +32,46 @@ SUPPORTED_EXTENSIONS = {
     ".go": "go",
     ".rs": "rust",
     ".java": "java",
+    ".php": "php",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".hpp": "cpp",
+    ".hh": "cpp",
+    ".hxx": "cpp",
+    ".cs": "csharp",
+    ".rb": "ruby",
+    ".kt": "kotlin",
+    ".kts": "kotlin",
+    ".swift": "swift",
+    ".lua": "lua",
+    ".sh": "shell",
+    ".bash": "shell",
+    ".zsh": "shell",
+    ".dart": "dart",
+    ".scala": "scala",
+    ".pl": "perl",
+    ".pm": "perl",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".hs": "haskell",
+    ".lhs": "haskell",
+    ".zig": "zig",
+    ".r": "rlang",
+    ".R": "rlang",
+    ".groovy": "groovy",
+    ".m": "objective_c",
+    ".mm": "objective_c",
+    ".nim": "nim",
+    ".clj": "clojure",
+    ".cljs": "clojure",
+    ".cljc": "clojure",
+    ".edn": "clojure",
+    ".erl": "erlang",
+    ".hrl": "erlang",
+    ".sol": "solidity",
 }
 
 
@@ -135,7 +175,7 @@ def run_analysis(config: dict, project_root: str) -> DependencyGraph:
             parser = PythonParser(str(root))
         elif lang in ("javascript", "typescript"):
             parser = JSParser(str(root))
-        elif lang in ("go", "rust", "java"):
+        elif lang in ("go", "rust", "java", "php", "c", "cpp", "csharp", "ruby", "kotlin", "swift", "lua", "shell", "dart", "scala", "perl", "elixir", "haskell", "zig", "rlang", "groovy", "objective_c", "nim", "clojure", "erlang", "solidity"):
             generic = GenericParser(str(root))
         else:
             continue
@@ -145,7 +185,7 @@ def run_analysis(config: dict, project_root: str) -> DependencyGraph:
             rel_path = str(file_path.relative_to(root)).replace(os.sep, "/")
 
             if cache.file_changed(abs_str) or not cache.get_cached_node(rel_path):
-                if lang in ("go", "rust", "java"):
+                if lang in ("go", "rust", "java", "php", "c", "cpp", "csharp", "ruby", "kotlin", "swift", "lua", "shell", "dart", "scala", "perl", "elixir", "haskell", "zig", "rlang", "groovy", "objective_c", "nim", "clojure", "erlang", "solidity"):
                     node = generic.parse_file(str(file_path), lang)
                 else:
                     node = parser.parse_file(str(file_path))
@@ -209,34 +249,35 @@ def _group_by_language(files: list[Path]) -> dict[str, list[Path]]:
     return grouped
 
 
-def generate_reports(graph: DependencyGraph, config: dict, project_root: str) -> list[str]:
+def generate_reports(graph: DependencyGraph, config: dict, project_root: str) -> dict:
     output_cfg = config.get("output", {})
     output_dir = output_cfg.get("dir", "./output")
-    output_format = output_cfg.get("format", "both")
-    include_mermaid = output_cfg.get("include_mermaid", True)
-    include_html = output_cfg.get("include_html", True)
 
     if not Path(output_dir).is_absolute():
         output_dir = str(Path(project_root) / output_dir)
 
-    generated: list[str] = []
+    result: dict = {"output_dir": output_dir, "html": "", "json": "", "markdown": ""}
+
+    output_format = output_cfg.get("format", "both")
+    include_mermaid = output_cfg.get("include_mermaid", True)
+    include_html = output_cfg.get("include_html", True)
 
     if output_format in ("json", "both"):
         path = JSONReporter().generate(graph, output_dir)
-        generated.append(path)
+        result["json"] = path
         print(f"[输出] JSON 报告: {path}")
 
     if output_format in ("markdown", "both"):
         path = MarkdownReporter(include_mermaid=include_mermaid).generate(graph, output_dir)
-        generated.append(path)
+        result["markdown"] = path
         print(f"[输出] Markdown 报告: {path}")
 
     if include_html:
         path = HTMLReporter().generate(graph, output_dir)
-        generated.append(path)
+        result["html"] = path
         print(f"[输出] HTML 可视化报告: {path}")
 
-    return generated
+    return result
 
 
 def print_summary(graph: DependencyGraph) -> None:

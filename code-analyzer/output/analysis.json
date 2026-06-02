@@ -1,13 +1,13 @@
 {
   "stats": {
-    "total_files": 20,
-    "total_lines": 2150,
-    "total_imports": 20,
+    "total_files": 22,
+    "total_lines": 2443,
+    "total_imports": 21,
     "layers": {
       "application": 1,
-      "domain": 1,
-      "foundation": 9,
-      "common": 9
+      "common": 10,
+      "foundation": 10,
+      "domain": 1
     },
     "cycles": 0
   },
@@ -25,6 +25,20 @@
       "exports": [],
       "lines": 11,
       "layer": "application"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\run_gui.py",
+      "relative_path": "run_gui.py",
+      "language": "python",
+      "purpose": "模块文件",
+      "purpose_source": "static",
+      "imports": [
+        "src/gui_app.py"
+      ],
+      "imported_by": [],
+      "exports": [],
+      "lines": 11,
+      "layer": "common"
     },
     {
       "path": "E:\\Program self-understanding\\code-analyzer\\src\\__init__.py",
@@ -134,6 +148,24 @@
       "layer": "foundation"
     },
     {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\gui_app.py",
+      "relative_path": "src/gui_app.py",
+      "language": "python",
+      "purpose": "定义类: RedirectText, AnalyzerGUI",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [
+        "run_gui.py"
+      ],
+      "exports": [
+        "class:RedirectText",
+        "class:AnalyzerGUI",
+        "fn:main"
+      ],
+      "lines": 281,
+      "layer": "foundation"
+    },
+    {
       "path": "E:\\Program self-understanding\\code-analyzer\\src\\main.py",
       "relative_path": "src/main.py",
       "language": "python",
@@ -154,8 +186,18 @@
       "imported_by": [
         "run.py"
       ],
-      "exports": [],
-      "lines": 330,
+      "exports": [
+        "var:SUPPORTED_EXTENSIONS",
+        "fn:load_config",
+        "fn:scan_files",
+        "fn:detect_language",
+        "fn:run_analysis",
+        "fn:generate_reports",
+        "fn:print_summary",
+        "fn:print_rule_result",
+        "fn:main"
+      ],
+      "lines": 331,
       "layer": "domain"
     },
     {

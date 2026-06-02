@@ -1,0 +1,115 @@
+analyzer:
+  # 目标编程语言: python | javascript | typescript | auto (自动检测)
+  language: auto
+
+  # 要分析的目录（相对于项目根目录）
+  target_dir: "."
+
+  # 排除的目录
+  exclude_dirs:
+    - "__pycache__"
+    - "node_modules"
+    - ".git"
+    - ".venv"
+    - "venv"
+    - ".idea"
+    - ".vscode"
+    - "dist"
+    - "build"
+    - "output"
+
+  # 排除的文件模式
+  exclude_patterns:
+    - "*.pyc"
+    - "*.min.js"
+    - "*.bundle.js"
+
+llm:
+  # 是否启用 LLM 分析
+  enabled: true
+
+  # API 地址（兼容 OpenAI 接口）
+  api_base: "https://api.openai.com/v1"
+
+  # API Key（也可通过环境变量 OPENAI_API_KEY 设置）
+  api_key: ""
+
+  # 模型名称
+  model: "gpt-4o-mini"
+
+  # 请求超时（秒）
+  timeout: 60
+
+  # 最大并发请求数
+  max_concurrency: 5
+
+  # 每个文件发送给 LLM 的最大字符数
+  max_file_chars: 8000
+
+output:
+  # 输出目录
+  dir: "./output"
+
+  # 输出格式: json | markdown | both
+  format: both
+
+  # 是否在 markdown 中包含 Mermaid 依赖图
+  include_mermaid: true
+
+  # 是否生成 HTML 可视化依赖图
+  include_html: true
+
+# 架构规则校验
+rules:
+  enabled: false
+
+  rules:
+    # 示例规则 1: 禁止 domain 层依赖 application 层
+    # - name: "domain-no-app-dependency"
+    #   type: "no_dependency"
+    #   severity: "error"
+    #   from: "src/domain/"
+    #   to: "src/application/"
+
+    # 示例规则 2: 层级规则
+    # - name: "layer-architecture"
+    #   type: "layer_rule"
+    #   severity: "error"
+    #   layers:
+    #     foundation: "src/foundation/|src/utils/"
+    #     domain: "src/domain/"
+    #     application: "src/application/"
+    #     interface: "src/interface/"
+    #   allow:
+    #     - "domain->foundation"
+    #     - "application->domain"
+    #     - "application->foundation"
+    #     - "interface->application"
+
+    # 示例规则 3: 命名规范
+    # - name: "snake-case-files"
+    #   type: "naming_pattern"
+    #   severity: "warning"
+    #   target: "src/"
+    #   pattern: "^[a-z][a-z0-9_]*$"
+
+    # 示例规则 4: 禁止导入
+    # - name: "no-deprecated-imports"
+    #   type: "disallowed_import"
+    #   severity: "error"
+    #   disallowed:
+    #     - "deprecated"
+    #     - "legacy"
+
+    # 示例规则 5: 最大依赖数
+    # - name: "max-deps-per-file"
+    #   type: "max_dependencies"
+    #   severity: "warning"
+    #   target: "src/"
+    #   max: 15
+
+    # 示例规则 6: 最大循环依赖大小
+    # - name: "max-cycle-size"
+    #   type: "max_cycle_size"
+    #   severity: "error"
+    #   max: 2

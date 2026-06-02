@@ -1,6 +1,6 @@
 {
   "hashes": {
-    "E:\\Program self-understanding\\code-analyzer\\src\\main.py": "7fa8948b512e0a912fdc0bd2453c3481be729caabbceb7df2d9dab9b77748dcd",
+    "E:\\Program self-understanding\\code-analyzer\\src\\main.py": "b6ca31a358a23e2a82c0cb1cbb84b3ca08ac00deba5033d0f5f56221f9cfeaac",
     "E:\\Program self-understanding\\code-analyzer\\src\\__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\incremental_cache.py": "505fe6af560c00f6b91689e26dc700f4e6d1b7d6c7955fd2caf51ac43befac4e",
     "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\llm_client.py": "0f10b67b68b37a1381778f2f059698cdc2aa3591d9eea0134926a649fc8bee8d",
@@ -19,7 +19,9 @@
     "E:\\Program self-understanding\\code-analyzer\\tests\\fixtures\\java\\Application.java": "eddb404023e34fed4d54e3d080733dd73a32537b29565f281c56f8078ec66522",
     "E:\\Program self-understanding\\code-analyzer\\tests\\fixtures\\rust\\app.rs": "e0ee7051cbb4598060d170de8508b5f143f84ebc9da26bf995fd80e09f7adff0",
     "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\rule_engine.py": "31164ce9053394b10c9cca443020cabdf48508cf0e77e1990de3a0688803fda2",
-    "E:\\Program self-understanding\\code-analyzer\\run.py": "bd1fffc0f1b26e230ef63ff9330351f508c19b8f9abd3a0473056c251ed2d6c5"
+    "E:\\Program self-understanding\\code-analyzer\\run.py": "bd1fffc0f1b26e230ef63ff9330351f508c19b8f9abd3a0473056c251ed2d6c5",
+    "E:\\Program self-understanding\\code-analyzer\\run_gui.py": "ae6314b9a897eccea4d22f740b655e739e87584119641702ce472e6a3cc57b8a",
+    "E:\\Program self-understanding\\code-analyzer\\src\\gui_app.py": "9c813f33701f27877878182ce75e38ccbbcb9ce434695b033a826be13a9f85cc"
   },
   "nodes": {
     "src/main.py": {
@@ -52,7 +54,7 @@
         "fn:print_rule_result",
         "fn:main"
       ],
-      "lines": 330,
+      "lines": 331,
       "layer": ""
     },
     "src/__init__.py": {
@@ -344,6 +346,36 @@
       "imported_by": [],
       "exports": [],
       "lines": 11,
+      "layer": ""
+    },
+    "run_gui.py": {
+      "path": "E:\\Program self-understanding\\code-analyzer\\run_gui.py",
+      "relative_path": "run_gui.py",
+      "language": "python",
+      "purpose": "模块文件",
+      "purpose_source": "static",
+      "imports": [
+        "src/gui_app.py"
+      ],
+      "imported_by": [],
+      "exports": [],
+      "lines": 11,
+      "layer": ""
+    },
+    "src/gui_app.py": {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\gui_app.py",
+      "relative_path": "src/gui_app.py",
+      "language": "python",
+      "purpose": "定义类: RedirectText, AnalyzerGUI",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [
+        "class:RedirectText",
+        "class:AnalyzerGUI",
+        "fn:main"
+      ],
+      "lines": 281,
       "layer": ""
     }
   }
