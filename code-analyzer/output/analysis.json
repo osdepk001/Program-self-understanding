@@ -1,0 +1,318 @@
+{
+  "stats": {
+    "total_files": 20,
+    "total_lines": 2150,
+    "total_imports": 20,
+    "layers": {
+      "application": 1,
+      "domain": 1,
+      "foundation": 9,
+      "common": 9
+    },
+    "cycles": 0
+  },
+  "files": [
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\run.py",
+      "relative_path": "run.py",
+      "language": "python",
+      "purpose": "模块文件",
+      "purpose_source": "static",
+      "imports": [
+        "src/main.py"
+      ],
+      "imported_by": [],
+      "exports": [],
+      "lines": 11,
+      "layer": "application"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\__init__.py",
+      "relative_path": "src/__init__.py",
+      "language": "python",
+      "purpose": "",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [],
+      "lines": 0,
+      "layer": "foundation"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\__init__.py",
+      "relative_path": "src/analyzer/__init__.py",
+      "language": "python",
+      "purpose": "",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [],
+      "lines": 0,
+      "layer": "foundation"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\incremental_cache.py",
+      "relative_path": "src/analyzer/incremental_cache.py",
+      "language": "python",
+      "purpose": "定义类: IncrementalCache",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 84,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\llm_client.py",
+      "relative_path": "src/analyzer/llm_client.py",
+      "language": "python",
+      "purpose": "定义类: LLMAnalyzer",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 106,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\rule_engine.py",
+      "relative_path": "src/analyzer/rule_engine.py",
+      "language": "python",
+      "purpose": "定义类: RuleViolation, RuleResult, RuleEngine",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 219,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\graph\\__init__.py",
+      "relative_path": "src/graph/__init__.py",
+      "language": "python",
+      "purpose": "",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [],
+      "lines": 0,
+      "layer": "foundation"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\graph\\dependency_graph.py",
+      "relative_path": "src/graph/dependency_graph.py",
+      "language": "python",
+      "purpose": "定义类: FileNode, DependencyGraph",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [
+        "src/main.py",
+        "src/analyzer/incremental_cache.py",
+        "src/analyzer/llm_client.py",
+        "src/analyzer/rule_engine.py",
+        "src/parser/generic_parser.py",
+        "src/parser/js_parser.py",
+        "src/parser/python_parser.py",
+        "src/reporter/html_reporter.py",
+        "src/reporter/json_reporter.py",
+        "src/reporter/markdown_reporter.py"
+      ],
+      "exports": [],
+      "lines": 162,
+      "layer": "foundation"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\main.py",
+      "relative_path": "src/main.py",
+      "language": "python",
+      "purpose": "定义函数: load_config, scan_files, detect_language ...",
+      "purpose_source": "static",
+      "imports": [
+        "src/analyzer/incremental_cache.py",
+        "src/analyzer/llm_client.py",
+        "src/analyzer/rule_engine.py",
+        "src/graph/dependency_graph.py",
+        "src/parser/generic_parser.py",
+        "src/parser/js_parser.py",
+        "src/parser/python_parser.py",
+        "src/reporter/html_reporter.py",
+        "src/reporter/json_reporter.py",
+        "src/reporter/markdown_reporter.py"
+      ],
+      "imported_by": [
+        "run.py"
+      ],
+      "exports": [],
+      "lines": 330,
+      "layer": "domain"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\parser\\__init__.py",
+      "relative_path": "src/parser/__init__.py",
+      "language": "python",
+      "purpose": "",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [],
+      "lines": 0,
+      "layer": "foundation"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\parser\\generic_parser.py",
+      "relative_path": "src/parser/generic_parser.py",
+      "language": "python",
+      "purpose": "定义类: GenericParser",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 228,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\parser\\js_parser.py",
+      "relative_path": "src/parser/js_parser.py",
+      "language": "python",
+      "purpose": "定义类: JSParser",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 171,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\parser\\python_parser.py",
+      "relative_path": "src/parser/python_parser.py",
+      "language": "python",
+      "purpose": "定义类: PythonParser",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 158,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\__init__.py",
+      "relative_path": "src/reporter/__init__.py",
+      "language": "python",
+      "purpose": "",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [],
+      "lines": 0,
+      "layer": "foundation"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\html_reporter.py",
+      "relative_path": "src/reporter/html_reporter.py",
+      "language": "python",
+      "purpose": "定义类: HTMLReporter",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 394,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\json_reporter.py",
+      "relative_path": "src/reporter/json_reporter.py",
+      "language": "python",
+      "purpose": "定义类: JSONReporter",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 32,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\markdown_reporter.py",
+      "relative_path": "src/reporter/markdown_reporter.py",
+      "language": "python",
+      "purpose": "定义类: MarkdownReporter",
+      "purpose_source": "static",
+      "imports": [
+        "src/graph/dependency_graph.py"
+      ],
+      "imported_by": [
+        "src/main.py"
+      ],
+      "exports": [],
+      "lines": 138,
+      "layer": "common"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\tests\\fixtures\\go\\server.go",
+      "relative_path": "tests/fixtures/go/server.go",
+      "language": "go",
+      "purpose": "定义类型: Server, Config",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [],
+      "lines": 35,
+      "layer": "foundation"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\tests\\fixtures\\java\\Application.java",
+      "relative_path": "tests/fixtures/java/Application.java",
+      "language": "java",
+      "purpose": "定义类型: Application",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [],
+      "lines": 43,
+      "layer": "foundation"
+    },
+    {
+      "path": "E:\\Program self-understanding\\code-analyzer\\tests\\fixtures\\rust\\app.rs",
+      "relative_path": "tests/fixtures/rust/app.rs",
+      "language": "rust",
+      "purpose": "定义类型: App, AppMode, Runnable ...",
+      "purpose_source": "static",
+      "imports": [],
+      "imported_by": [],
+      "exports": [],
+      "lines": 39,
+      "layer": "foundation"
+    }
+  ]
+}
