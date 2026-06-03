@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import os
 import sys
-import threading
 from pathlib import Path
 from typing import Optional
 
@@ -11,15 +10,15 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor, QTextCursor, QIcon
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog,
-    QTextEdit, QFrame, QScrollArea, QGridLayout,
+    QTextEdit, QGridLayout,
 )
 
 from qfluentwidgets import (
     FluentWindow, NavigationItemPosition, FluentIcon, InfoBar, InfoBarPosition,
     PushButton, PrimaryPushButton, LineEdit, ComboBox, SwitchButton,
-    CardWidget, SubtitleLabel, BodyLabel, StrongBodyLabel, TitleLabel,
-    ProgressBar, IndeterminateProgressBar, TextEdit, ScrollArea,
-    setTheme, Theme, setThemeColor, qconfig, FluentStyleSheet,
+    CardWidget, BodyLabel, StrongBodyLabel, TitleLabel,
+    ProgressBar, IndeterminateProgressBar,
+    setTheme, Theme, setThemeColor, qconfig,
 )
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -34,7 +33,8 @@ from src.main import (
 
 class AnalysisWorker(QThread):
     log_signal = pyqtSignal(str)
-    finished_signal = pyqtSignal(dict, int, int, int)
+    progress_signal = pyqtSignal(int, int)
+    finished_signal = pyqtSignal(dict, int, int, int, int)
     error_signal = pyqtSignal(str)
 
     def __init__(self, project_dir: str, config_file: str, use_llm: bool, gen_html: bool) -> None:
@@ -53,17 +53,21 @@ class AnalysisWorker(QThread):
             if not self._gen_html:
                 config.setdefault("output", {})["include_html"] = False
 
-            graph = run_analysis(config, self._project_dir)
+            graph = run_analysis(config, self._project_dir, progress_callback=self._on_progress)
             node_count = len(graph.get_all_nodes())
             total_lines = sum(n.lines for n in graph.get_all_nodes())
             dep_count = sum(len(n.imports) for n in graph.get_all_nodes())
+            xref_count = sum(len(n.cross_refs) for n in graph.get_all_nodes())
             paths = generate_reports(graph, config, self._project_dir)
 
             self._restore_output()
-            self.finished_signal.emit(paths, node_count, total_lines, dep_count)
+            self.finished_signal.emit(paths, node_count, total_lines, dep_count, xref_count)
         except Exception as exc:
             self._restore_output()
             self.error_signal.emit(str(exc))
+
+    def _on_progress(self, current: int, total: int) -> None:
+        self.progress_signal.emit(current, total)
 
     def _redirect_output(self) -> None:
         sys.stdout = _LogRedirector(self.log_signal)
@@ -105,12 +109,6 @@ class ConfigCard(CardWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
-
-        title_row = QHBoxLayout()
-        StrongBodyLabel("分析配置", self)
-        title_row.addWidget(StrongBodyLabel("分析配置", self))
-        title_row.addStretch()
-        layout.addLayout(title_row)
 
         grid = QGridLayout()
         grid.setSpacing(12)
@@ -187,6 +185,7 @@ class LogCard(CardWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setBorderRadius(8)
+        self._is_dark = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -200,26 +199,28 @@ class LogCard(CardWidget):
         self._log_area = QTextEdit(self)
         self._log_area.setReadOnly(True)
         self._log_area.setFont(QFont("Cascadia Code", 10))
-        self._log_area.setStyleSheet("""
-            QTextEdit {
-                background-color: #1e1e2e;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px;
-            }
-        """)
         layout.addWidget(self._log_area)
+
+        self.set_dark_theme()
 
     def append_log(self, text: str) -> None:
         self._log_area.moveCursor(QTextCursor.MoveOperation.End)
-        color = "#cdd6f4"
-        if text.startswith("[错误]"):
-            color = "#ed8796"
-        elif text.startswith("[警告]"):
-            color = "#eed49f"
-        elif text.startswith("[信息]"):
-            color = "#7dc4e4"
+        if self._is_dark:
+            color = "#cdd6f4"
+            if text.startswith("[错误]"):
+                color = "#ed8796"
+            elif text.startswith("[警告]"):
+                color = "#eed49f"
+            elif text.startswith("[信息]"):
+                color = "#7dc4e4"
+        else:
+            color = "#333333"
+            if text.startswith("[错误]"):
+                color = "#c0392b"
+            elif text.startswith("[警告]"):
+                color = "#e67e22"
+            elif text.startswith("[信息]"):
+                color = "#2471a3"
         self._log_area.setTextColor(QColor(color))
         self._log_area.insertPlainText(text)
         scrollbar = self._log_area.verticalScrollBar()
@@ -229,17 +230,19 @@ class LogCard(CardWidget):
         self._log_area.clear()
 
     def set_light_theme(self) -> None:
+        self._is_dark = False
         self._log_area.setStyleSheet("""
             QTextEdit {
-                background-color: #f5f5f5;
-                color: #1e1e2e;
-                border: none;
+                background-color: #ffffff;
+                color: #333333;
+                border: 1px solid #e0e0e0;
                 border-radius: 6px;
                 padding: 8px;
             }
         """)
 
     def set_dark_theme(self) -> None:
+        self._is_dark = True
         self._log_area.setStyleSheet("""
             QTextEdit {
                 background-color: #1e1e2e;
@@ -277,6 +280,7 @@ class SummaryCard(CardWidget):
 class AnalyzerPage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("analyzerPage")
 
         self._html_path: str = ""
         self._output_dir: str = ""
@@ -294,7 +298,7 @@ class AnalyzerPage(QWidget):
         layout.addWidget(title)
         layout.addWidget(BodyLabel("项目代码结构分析工具 — 自动梳理文件依赖关系与功能概览", self))
 
-        layout.addSpacing(8)
+        layout.addSpacing(4)
 
         self._config_card = ConfigCard(self)
         layout.addWidget(self._config_card)
@@ -318,9 +322,10 @@ class AnalyzerPage(QWidget):
 
         action_row.addStretch()
 
-        self._progress = IndeterminateProgressBar(self)
-        self._progress.setFixedWidth(200)
+        self._progress = ProgressBar(self)
+        self._progress.setFixedWidth(280)
         self._progress.setVisible(False)
+        self._progress.setRange(0, 100)
         action_row.addWidget(self._progress)
         layout.addLayout(action_row)
 
@@ -384,7 +389,7 @@ class AnalyzerPage(QWidget):
         self._html_btn.setEnabled(False)
         self._folder_btn.setEnabled(False)
         self._progress.setVisible(True)
-        self._progress.start()
+        self._progress.setValue(0)
         self._log_card.clear()
         self._summary_card.set_status("正在分析...")
         self._summary_card.set_stats("")
@@ -395,18 +400,24 @@ class AnalyzerPage(QWidget):
             self._config_card.is_html_enabled(),
         )
         self._worker.log_signal.connect(self._log_card.append_log)
+        self._worker.progress_signal.connect(self._on_progress)
         self._worker.finished_signal.connect(self._on_done)
         self._worker.error_signal.connect(self._on_error)
         self._worker.start()
 
-    def _on_done(self, paths: dict, node_count: int, total_lines: int, dep_count: int) -> None:
+    def _on_progress(self, current: int, total: int) -> None:
+        if total > 0:
+            pct = int(current * 100 / total)
+            self._progress.setValue(pct)
+            self._summary_card.set_status(f"正在分析... {current}/{total}")
+
+    def _on_done(self, paths: dict, node_count: int, total_lines: int, dep_count: int, xref_count: int) -> None:
         self._analyzing = False
         self._analyze_btn.setEnabled(True)
         self._analyze_btn.setText("开始分析")
-        self._progress.stop()
         self._progress.setVisible(False)
         self._summary_card.set_status("分析完成")
-        self._summary_card.set_stats(f"文件 {node_count}  ·  代码行 {total_lines}  ·  依赖 {dep_count}")
+        self._summary_card.set_stats(f"文件 {node_count}  ·  代码行 {total_lines}  ·  依赖 {dep_count}  ·  引用 {xref_count}")
 
         self._log_card.append_log("\n" + "─" * 48 + "\n")
         self._log_card.append_log("  分析完成\n")
@@ -414,6 +425,7 @@ class AnalyzerPage(QWidget):
         self._log_card.append_log(f"  文件数       {node_count}\n")
         self._log_card.append_log(f"  代码行数     {total_lines}\n")
         self._log_card.append_log(f"  依赖关系     {dep_count}\n")
+        self._log_card.append_log(f"  符号引用     {xref_count}\n")
         self._log_card.append_log("─" * 48 + "\n")
 
         html_path = paths.get("html", "")
@@ -426,13 +438,12 @@ class AnalyzerPage(QWidget):
             self._output_dir = output_dir
             self._folder_btn.setEnabled(True)
 
-        InfoBar.success("完成", f"成功分析 {node_count} 个文件", duration=3000, parent=self, position=InfoBarPosition.TOP)
+        InfoBar.success("完成", f"成功分析 {node_count} 个文件，发现 {xref_count} 个符号引用", duration=3000, parent=self, position=InfoBarPosition.TOP)
 
     def _on_error(self, error_msg: str) -> None:
         self._analyzing = False
         self._analyze_btn.setEnabled(True)
         self._analyze_btn.setText("开始分析")
-        self._progress.stop()
         self._progress.setVisible(False)
         self._summary_card.set_status("分析失败")
         self._log_card.append_log(f"\n[错误] {error_msg}\n")
@@ -457,6 +468,7 @@ class AnalyzerPage(QWidget):
 class SettingsPage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("settingsPage")
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -480,7 +492,7 @@ class SettingsPage(QWidget):
         theme_row.addWidget(BodyLabel("应用主题", self))
         theme_row.addStretch()
         self._theme_combo = ComboBox(self)
-        self._theme_combo.addItems(["深色", "浅色", "跟随系统"])
+        self._theme_combo.addItems(["浅色", "深色", "跟随系统"])
         self._theme_combo.setCurrentIndex(0)
         self._theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         theme_row.addWidget(self._theme_combo)
@@ -497,10 +509,30 @@ class SettingsPage(QWidget):
             ("Rust", ".rs"),
             ("Java", ".java"),
             ("PHP", ".php"),
+            ("C/C++", ".c/.h/.cpp/.hpp"),
+            ("C#", ".cs"),
+            ("Ruby", ".rb"),
+            ("Kotlin", ".kt/.kts"),
+            ("Swift", ".swift"),
+            ("Lua", ".lua"),
+            ("Shell", ".sh/.bash/.zsh"),
+            ("Dart", ".dart"),
+            ("Scala", ".scala"),
+            ("Perl", ".pl/.pm"),
+            ("Elixir", ".ex/.exs"),
+            ("Haskell", ".hs"),
+            ("Zig", ".zig"),
+            ("R", ".r/.R"),
+            ("Groovy", ".groovy"),
+            ("Objective-C", ".m/.mm"),
+            ("Nim", ".nim"),
+            ("Clojure", ".clj/.cljs"),
+            ("Erlang", ".erl/.hrl"),
+            ("Solidity", ".sol"),
         ]
         for i, (name, ext) in enumerate(langs):
-            lang_grid.addWidget(BodyLabel(name, self), i // 2, (i % 2) * 2)
-            lang_grid.addWidget(BodyLabel(ext, self), i // 2, (i % 2) * 2 + 1)
+            lang_grid.addWidget(BodyLabel(name, self), i // 3, (i % 3) * 2)
+            lang_grid.addWidget(BodyLabel(ext, self), i // 3, (i % 3) * 2 + 1)
         card_layout.addLayout(lang_grid)
 
         layout.addWidget(card)
@@ -508,11 +540,55 @@ class SettingsPage(QWidget):
 
     def _on_theme_changed(self, index: int) -> None:
         if index == 0:
-            setTheme(Theme.DARK)
-        elif index == 1:
             setTheme(Theme.LIGHT)
+        elif index == 1:
+            setTheme(Theme.DARK)
         else:
             setTheme(Theme.AUTO)
+        main_win = self.window()
+        if isinstance(main_win, MainWindow):
+            main_win._apply_log_theme()
+
+
+class AboutPage(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("aboutPage")
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(36, 20, 36, 20)
+        layout.setSpacing(16)
+
+        layout.addWidget(TitleLabel("关于", self))
+
+        card = CardWidget(self)
+        card.setBorderRadius(8)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(24, 24, 24, 24)
+        card_layout.setSpacing(12)
+
+        card_layout.addWidget(StrongBodyLabel("Code Analyzer", self))
+        card_layout.addWidget(BodyLabel("版本: 1.0.0", self))
+        card_layout.addWidget(BodyLabel("项目代码结构分析工具 — 自动梳理文件依赖关系与功能概览", self))
+        card_layout.addWidget(BodyLabel("支持 26 种编程语言的静态分析与深度符号引用追踪。", self))
+        card_layout.addSpacing(8)
+        card_layout.addWidget(StrongBodyLabel("作者", self))
+        card_layout.addWidget(BodyLabel("OsDepK", self))
+        card_layout.addSpacing(12)
+
+        forum_btn = PrimaryPushButton(FluentIcon.GLOBE, "Os论坛", self)
+        forum_btn.clicked.connect(self._open_forum)
+        card_layout.addWidget(forum_btn)
+
+        layout.addWidget(card)
+        layout.addStretch()
+
+    @staticmethod
+    def _open_forum() -> None:
+        import webbrowser
+        webbrowser.open("http://osdepk.cn/")
 
 
 class MainWindow(FluentWindow):
@@ -522,21 +598,50 @@ class MainWindow(FluentWindow):
         self.resize(1000, 720)
         self.setMinimumSize(800, 600)
 
-        setTheme(Theme.DARK)
+        icon = self._load_app_icon()
+        if icon is not None:
+            self.setWindowIcon(icon)
+            QApplication.instance().setWindowIcon(icon)
+
+        setTheme(Theme.LIGHT)
         setThemeColor("#0078d4")
 
         self._analyzer_page = AnalyzerPage(self)
         self._settings_page = SettingsPage(self)
+        self._about_page = AboutPage(self)
 
         self.addSubInterface(self._analyzer_page, FluentIcon.HOME, "分析")
         self.addSubInterface(self._settings_page, FluentIcon.SETTING, "设置", NavigationItemPosition.BOTTOM)
+        self.addSubInterface(self._about_page, FluentIcon.INFO, "关于", NavigationItemPosition.BOTTOM)
 
         self.navigationInterface.setCurrentItem("分析")
 
         self._apply_log_theme()
 
+    @staticmethod
+    def _load_app_icon() -> Optional[QIcon]:
+        is_frozen = getattr(sys, "frozen", False)
+        if is_frozen:
+            candidates = [
+                Path(sys._MEIPASS) / "src" / "images" / "os.ico",
+                Path(sys.executable).parent / "src" / "images" / "os.ico",
+            ]
+        else:
+            candidates = [
+                Path(__file__).resolve().parent / "images" / "os.ico",
+                Path.cwd() / "src" / "images" / "os.ico",
+            ]
+        for candidate in candidates:
+            if candidate.exists():
+                return QIcon(str(candidate))
+        return None
+
     def _apply_log_theme(self) -> None:
-        self._analyzer_page._log_card.set_dark_theme()
+        theme = qconfig.theme
+        if theme == Theme.DARK:
+            self._analyzer_page._log_card.set_dark_theme()
+        else:
+            self._analyzer_page._log_card.set_light_theme()
 
 
 def main() -> None:

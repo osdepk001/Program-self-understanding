@@ -4,8 +4,9 @@ import argparse
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
 import yaml
 
@@ -146,12 +147,13 @@ def detect_language(files: list[Path], config: dict) -> str:
     return max(ext_counts, key=ext_counts.get)
 
 
-def run_analysis(config: dict, project_root: str) -> DependencyGraph:
+def run_analysis(config: dict, project_root: str, progress_callback: Callable[[int, int], None] | None = None) -> DependencyGraph:
     root = Path(project_root).resolve()
     print(f"[信息] 项目根目录: {root}")
 
     files = scan_files(root, config)
-    print(f"[信息] 发现 {len(files)} 个可分析文件")
+    total = len(files)
+    print(f"[信息] 发现 {total} 个可分析文件")
 
     grouped = _group_by_language(files)
     for lang, lang_files in grouped.items():
@@ -167,48 +169,94 @@ def run_analysis(config: dict, project_root: str) -> DependencyGraph:
         valid_abs_paths.add(str(f.resolve()))
         valid_rel_paths.add(str(f.relative_to(root)).replace(os.sep, "/"))
 
+    # 创建解析器
+    python_parser = PythonParser(str(root))
+    js_parser = JSParser(str(root))
+    generic_parser = GenericParser(str(root))
+
+    def parse_single_file(args: tuple[Path, str]) -> tuple[str, Optional[dict], bool]:
+        """解析单个文件，返回 (rel_path, node_dict, is_new)"""
+        file_path, lang = args
+        abs_str = str(file_path.resolve())
+        rel_path = str(file_path.relative_to(root)).replace(os.sep, "/")
+
+        # 检查缓存
+        if not cache.file_changed(abs_str) and cache.get_cached_node(rel_path):
+            return rel_path, None, False  # 使用缓存
+
+        # 解析文件
+        if lang == "python":
+            node = python_parser.parse_file(str(file_path))
+        elif lang in ("javascript", "typescript"):
+            node = js_parser.parse_file(str(file_path))
+        else:
+            node = generic_parser.parse_file(str(file_path), lang)
+
+        if node:
+            cache.put_node(rel_path, node.to_dict())
+            cache.update_hash(abs_str)
+            return rel_path, node.to_dict(), True
+        return rel_path, None, False
+
+    # 准备所有解析任务
+    all_tasks: list[tuple[Path, str]] = []
+    for lang, lang_files in grouped.items():
+        for file_path in lang_files:
+            all_tasks.append((file_path, lang))
+
     changed_count = 0
     cached_count = 0
+    processed = 0
 
-    for lang, lang_files in grouped.items():
-        if lang == "python":
-            parser = PythonParser(str(root))
-        elif lang in ("javascript", "typescript"):
-            parser = JSParser(str(root))
-        elif lang in ("go", "rust", "java", "php", "c", "cpp", "csharp", "ruby", "kotlin", "swift", "lua", "shell", "dart", "scala", "perl", "elixir", "haskell", "zig", "rlang", "groovy", "objective_c", "nim", "clojure", "erlang", "solidity"):
-            generic = GenericParser(str(root))
-        else:
-            continue
+    # 使用线程池并行解析
+    max_workers = min(os.cpu_count() or 4, 8)
+    print(f"[信息] 使用 {max_workers} 个线程并行解析...")
 
-        for file_path in lang_files:
-            abs_str = str(file_path.resolve())
-            rel_path = str(file_path.relative_to(root)).replace(os.sep, "/")
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(parse_single_file, task): task for task in all_tasks}
 
-            if cache.file_changed(abs_str) or not cache.get_cached_node(rel_path):
-                if lang in ("go", "rust", "java", "php", "c", "cpp", "csharp", "ruby", "kotlin", "swift", "lua", "shell", "dart", "scala", "perl", "elixir", "haskell", "zig", "rlang", "groovy", "objective_c", "nim", "clojure", "erlang", "solidity"):
-                    node = generic.parse_file(str(file_path), lang)
-                else:
-                    node = parser.parse_file(str(file_path))
-                if node:
-                    graph.add_node(node)
-                    cache.put_node(rel_path, node.to_dict())
-                    changed_count += 1
-            else:
+        for future in as_completed(futures):
+            processed += 1
+            rel_path, node_dict, is_new = future.result()
+
+            if is_new and node_dict:
+                node = FileNode(
+                    path=node_dict.get("path", ""),
+                    relative_path=node_dict.get("relative_path", rel_path),
+                    language=node_dict.get("language", ""),
+                    purpose=node_dict.get("purpose", ""),
+                    purpose_source=node_dict.get("purpose_source", "static"),
+                    imports=node_dict.get("imports", []),
+                    exports=node_dict.get("exports", []),
+                    cross_refs=node_dict.get("cross_refs", {}),
+                    lines=node_dict.get("lines", 0),
+                )
+                graph.add_node(node)
+                changed_count += 1
+            elif not is_new:
                 cached_data = cache.get_cached_node(rel_path)
                 if cached_data:
                     node = FileNode(
-                        path=cached_data.get("path", abs_str),
+                        path=cached_data.get("path", ""),
                         relative_path=cached_data.get("relative_path", rel_path),
-                        language=cached_data.get("language", lang),
+                        language=cached_data.get("language", ""),
                         purpose=cached_data.get("purpose", ""),
                         purpose_source=cached_data.get("purpose_source", "cached"),
                         imports=cached_data.get("imports", []),
+                        exports=cached_data.get("exports", []),
+                        cross_refs=cached_data.get("cross_refs", {}),
                         lines=cached_data.get("lines", 0),
                     )
                     graph.add_node(node)
                     cached_count += 1
 
-            cache.update_hash(abs_str)
+            if progress_callback:
+                progress_callback(processed, total)
+
+            if processed % 50 == 0 or processed == total:
+                print(f"\r[信息] 进度: {processed}/{total}", end="", flush=True)
+
+    print()  # 换行
 
     cache.remove_stale_entries(valid_abs_paths, valid_rel_paths)
     cache.save()

@@ -20,6 +20,8 @@ class FileNode:
 
     exports: list[str] = field(default_factory=list)
 
+    cross_refs: dict[str, list[str]] = field(default_factory=dict)
+
     lines: int = 0
 
     layer: str = ""
@@ -34,6 +36,7 @@ class FileNode:
             "imports": self.imports,
             "imported_by": self.imported_by,
             "exports": self.exports,
+            "cross_refs": self.cross_refs,
             "lines": self.lines,
             "layer": self.layer,
         }
@@ -149,6 +152,7 @@ class DependencyGraph:
         total_files = len(self._nodes)
         total_lines = sum(n.lines for n in self._nodes.values())
         total_imports = sum(len(n.imports) for n in self._nodes.values())
+        total_xrefs = sum(len(n.cross_refs) for n in self._nodes.values())
         layers = {}
         for n in self._nodes.values():
             name = n.layer or "unknown"
@@ -157,6 +161,7 @@ class DependencyGraph:
             "total_files": total_files,
             "total_lines": total_lines,
             "total_imports": total_imports,
+            "total_xrefs": total_xrefs,
             "layers": layers,
             "cycles": len(self._cycles),
         }

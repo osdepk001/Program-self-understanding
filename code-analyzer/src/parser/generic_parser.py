@@ -325,6 +325,7 @@ class GenericParser:
         imports = self._extract_imports(cleaned, lang, config, abs_path)
         exports = self._extract_exports(cleaned, lang)
         purpose = self._extract_purpose(cleaned, lang)
+        cross_refs = self._extract_cross_refs(cleaned, lang, config, abs_path)
 
         return FileNode(
             path=str(abs_path),
@@ -334,6 +335,7 @@ class GenericParser:
             purpose_source="static",
             imports=imports,
             exports=exports,
+            cross_refs=cross_refs,
             lines=len(source_code.splitlines()),
         )
 
@@ -591,26 +593,62 @@ class GenericParser:
                 return resolved
         return None
 
-    def _resolve_c_include(self, included: str, source_path: Path) -> Optional[str]:
-        if included.startswith("/") or included.startswith("http"):
-            return None
+    def _resolve_php_use(self, namespace: str, source_path: Path) -> Optional[str]:
+        # 解析 PHP use 语句中的命名空间引用到文件路径
+        # use App\Models\User -> App/Models/User.php 或 src/App/Models/User.php
+        namespace = namespace.replace("\\", "/").lstrip("\\")
         candidates = [
-            source_path.parent / included,
-            self._project_root / included,
+            self._project_root / f"{namespace}.php",
+            source_path.parent / f"{namespace}.php",
         ]
         for candidate in candidates:
             resolved = self._to_relative(candidate)
             if resolved:
                 return resolved
+
+        # 尝试从根目录向上搜索
+        current = source_path.parent
+        while current > self._project_root:
+            candidate = current / f"{namespace}.php"
+            resolved = self._to_relative(candidate)
+            if resolved:
+                return resolved
+            if current == self._project_root:
+                break
+            current = current.parent
+
+        return None
+
+    def _resolve_c_include(self, included: str, source_path: Path) -> Optional[str]:
+        if included.startswith("/") or included.startswith("http"):
+            return None
+        search_dirs = [source_path.parent, self._project_root]
+        for search_dir in search_dirs:
+            candidate = search_dir / included
+            resolved = self._to_relative(candidate)
+            if resolved:
+                return resolved
+        # Walk up from source to project root
+        current = source_path.parent
+        while current > self._project_root:
+            current = current.parent
+            candidate = current / included
+            resolved = self._to_relative(candidate)
+            if resolved:
+                return resolved
+            if current == self._project_root:
+                break
         return None
 
     def _resolve_dot_import(self, module: str, ext: str, source_path: Path) -> Optional[str]:
         parts = module.split(".")
-        for depth in range(len(parts), 0, -1):
-            candidate = self._project_root / f"{'/'.join(parts[:depth])}{ext}"
-            resolved = self._to_relative(candidate)
-            if resolved:
-                return resolved
+        search_dirs = [source_path.parent, self._project_root]
+        for search_dir in search_dirs:
+            for depth in range(len(parts), 0, -1):
+                candidate = search_dir / f"{'/'.join(parts[:depth])}{ext}"
+                resolved = self._to_relative(candidate)
+                if resolved:
+                    return resolved
         return None
 
     def _resolve_ruby_require(self, included: str, source_path: Path) -> Optional[str]:
@@ -764,6 +802,76 @@ class GenericParser:
         except (ValueError, OSError):
             pass
         return None
+
+    def _extract_cross_refs(self, source: str, lang: str, config: dict, source_path: Path) -> dict[str, list[str]]:
+        """提取跨文件符号引用：追踪非 Python/JS 语言的符号使用。"""
+        cross_refs: dict[str, list[str]] = {}
+        source_dir = source_path.parent
+
+        # symbol_name -> resolved_relative_path
+        symbol_to_module: dict[str, str] = {}
+
+        # Java / Kotlin / Scala / Dart / Groovy / C# - import 语句
+        if lang in ("java", "kotlin", "scala", "groovy", "csharp"):
+            import_pattern = config.get("import_single")
+            if import_pattern:
+                for match in import_pattern.finditer(source):
+                    full_name = match.group(1)
+                    # 提取类名 (最后一个 . 之后的部分)
+                    class_name = full_name.split(".")[-1]
+                    resolved = self._resolve_dot_import(full_name, f".{lang}", source_path)
+                    if resolved:
+                        symbol_to_module[class_name] = resolved
+
+        # Go - import 语句
+        if lang == "go":
+            for match in config["single_import"].finditer(source):
+                module = match.group(1)
+                resolved = self._resolve_go_import(module, source_path)
+                if resolved:
+                    pkg_name = module.split("/")[-1]
+                    symbol_to_module[pkg_name] = resolved
+            for match in config["multi_import"].finditer(source):
+                block = match.group(1)
+                for inner in config["inner_import"].finditer(block):
+                    module = inner.group(1)
+                    resolved = self._resolve_go_import(module, source_path)
+                    if resolved:
+                        pkg_name = module.split("/")[-1]
+                        symbol_to_module[pkg_name] = resolved
+
+        # PHP - use 语句
+        if lang == "php":
+            use_pattern = config.get("use_namespace")
+            if use_pattern:
+                for match in use_pattern.finditer(source):
+                    full_name = match.group(1)
+                    class_name = full_name.split("\\")[-1]
+                    resolved = self._resolve_php_use(full_name, source_path)
+                    if resolved:
+                        symbol_to_module[class_name] = resolved
+
+        if not symbol_to_module:
+            return cross_refs
+
+        # Step 2: 检查符号是否在代码中被使用
+        for symbol, resolved_path in symbol_to_module.items():
+            usage_pattern = re.compile(r'\b' + re.escape(symbol) + r'\b')
+            # 排除 import/use 语句行
+            lines = source.split("\n")
+            found = False
+            for line in lines:
+                if not re.match(r'^\s*(?:import|using|require|include|use)\s', line):
+                    if usage_pattern.search(line):
+                        found = True
+                        break
+            if found:
+                if resolved_path not in cross_refs:
+                    cross_refs[resolved_path] = []
+                if symbol not in cross_refs[resolved_path]:
+                    cross_refs[resolved_path].append(symbol)
+
+        return cross_refs
 
     def _extract_exports(self, source: str, lang: str) -> list[str]:
         exports: list[str] = []

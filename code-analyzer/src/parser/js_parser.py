@@ -40,6 +40,27 @@ class JSParser:
 
     COMMENT_RE = re.compile(r"//.*$|/\*[\s\S]*?\*/", re.MULTILINE)
 
+    NAMED_IMPORT_RE = re.compile(
+        r"import\s+\{([^}]+)\}\s*from\s+['\"]([^'\"]+)['\"]",
+        re.MULTILINE,
+    )
+    STAR_IMPORT_RE = re.compile(
+        r"import\s+\*\s+as\s+(\w+)\s*from\s+['\"]([^'\"]+)['\"]",
+        re.MULTILINE,
+    )
+    DEFAULT_IMPORT_RE = re.compile(
+        r"import\s+(\w+)\s*from\s+['\"]([^'\"]+)['\"]",
+        re.MULTILINE,
+    )
+    REQUIRE_NAMED_RE = re.compile(
+        r"(?:const|let|var)\s+\{([^}]+)\}\s*=\s*require\s*\(\s*['\"]([^'\"]+)['\"]",
+        re.MULTILINE,
+    )
+    REQUIRE_DEFAULT_RE = re.compile(
+        r"(?:const|let|var)\s+(\w+)\s*=\s*require\s*\(\s*['\"]([^'\"]+)['\"]",
+        re.MULTILINE,
+    )
+
     def __init__(self, project_root: str) -> None:
         self._project_root = Path(project_root).resolve()
 
@@ -61,6 +82,7 @@ class JSParser:
         imports = self._extract_imports(cleaned, abs_path)
         exports = self._extract_exports(cleaned)
         purpose = self._extract_purpose(cleaned)
+        cross_refs = self._extract_cross_refs(cleaned, abs_path)
 
         return FileNode(
             path=str(abs_path),
@@ -70,6 +92,7 @@ class JSParser:
             purpose_source="static",
             imports=imports,
             exports=exports,
+            cross_refs=cross_refs,
             lines=len(source_code.splitlines()),
         )
 
@@ -88,21 +111,110 @@ class JSParser:
 
         return sorted(set(imports))
 
+    def _extract_cross_refs(self, source: str, source_path: Path) -> dict[str, list[str]]:
+        """提取跨文件符号引用：追踪 JS/TS import 的符号在代码中是否被实际使用。"""
+        cross_refs: dict[str, list[str]] = {}
+        source_dir = source_path.parent
+
+        # symbol_name -> resolved_relative_path
+        symbol_to_module: dict[str, str] = {}
+
+        # 处理 named imports: import { A, B } from './x'
+        for match in self.NAMED_IMPORT_RE.finditer(source):
+            names_str = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                for name_part in names_str.split(","):
+                    name_part = name_part.strip()
+                    if " as " in name_part:
+                        _, alias = name_part.split(" as ", 1)
+                        symbol_to_module[alias.strip()] = resolved
+                    else:
+                        symbol_to_module[name_part] = resolved
+
+        # 处理 star imports: import * as X from './x'
+        for match in self.STAR_IMPORT_RE.finditer(source):
+            name = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                symbol_to_module[name] = resolved
+
+        # 处理 default imports: import X from './x'
+        for match in self.DEFAULT_IMPORT_RE.finditer(source):
+            name = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                symbol_to_module[name] = resolved
+
+        # 处理 require named: const { A, B } = require('./x')
+        for match in self.REQUIRE_NAMED_RE.finditer(source):
+            names_str = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                for name_part in names_str.split(","):
+                    name_part = name_part.strip()
+                    if ":" in name_part:
+                        orig, _ = name_part.split(":", 1)
+                        symbol_to_module[orig.strip()] = resolved
+                    elif " as " in name_part:
+                        _, alias = name_part.split(" as ", 1)
+                        symbol_to_module[alias.strip()] = resolved
+                    else:
+                        symbol_to_module[name_part] = resolved
+
+        # 处理 require default: const X = require('./x')
+        for match in self.REQUIRE_DEFAULT_RE.finditer(source):
+            name = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                symbol_to_module[name] = resolved
+
+        if not symbol_to_module:
+            return cross_refs
+
+        # Step 2: 在代码中查找符号使用
+        for symbol, resolved_path in symbol_to_module.items():
+            # 使用单词边界检查确保是独立标识符使用
+            # 排除 import/require 语句行本身
+            usage_pattern = re.compile(r'\b' + re.escape(symbol) + r'\b')
+            # 在所有非 import 行中查找
+            lines = source.split("\n")
+            found = False
+            for line in lines:
+                if not re.match(r'^\s*(?:import|export|const|let|var)\s', line):
+                    if usage_pattern.search(line):
+                        found = True
+                        break
+            if found:
+                if resolved_path not in cross_refs:
+                    cross_refs[resolved_path] = []
+                if symbol not in cross_refs[resolved_path]:
+                    cross_refs[resolved_path].append(symbol)
+
+        return cross_refs
+
     def _resolve_js_import(self, module_spec: str, source_dir: Path) -> Optional[str]:
         if module_spec.startswith("."):
-            resolved = self._to_relative(source_dir / module_spec)
-            if resolved:
-                return resolved
-
-            for ext in (".js", ".ts", ".jsx", ".tsx"):
-                resolved = self._to_relative(source_dir / (module_spec + ext))
+            search_dirs = [source_dir, self._project_root]
+            for search_dir in search_dirs:
+                resolved = self._to_relative(search_dir / module_spec)
                 if resolved:
                     return resolved
 
-            for ext in (".js", ".ts", ".jsx", ".tsx"):
-                resolved = self._to_relative(source_dir / module_spec / f"index{ext}")
-                if resolved:
-                    return resolved
+                for ext in (".js", ".ts", ".jsx", ".tsx"):
+                    resolved = self._to_relative(search_dir / (module_spec + ext))
+                    if resolved:
+                        return resolved
+
+                for ext in (".js", ".ts", ".jsx", ".tsx"):
+                    resolved = self._to_relative(search_dir / module_spec / f"index{ext}")
+                    if resolved:
+                        return resolved
 
         return None
 

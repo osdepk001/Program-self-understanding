@@ -11,7 +11,7 @@ from ..graph.dependency_graph import FileNode
 
 
 class PythonParser:
-    """使用 Python 内置 ast 模块解析源文件，提取导入、导出和功能描述。"""
+    """使用 Python 内置 ast 模块解析源文件，提取导入、导出、功能描述和跨文件符号引用。"""
 
     def __init__(self, project_root: str) -> None:
         self._project_root = Path(project_root).resolve()
@@ -31,9 +31,11 @@ class PythonParser:
         except SyntaxError:
             return None
 
-        imports = self._extract_imports(tree, abs_path)
+        source_dir = abs_path.parent
+        imports = self._extract_imports(tree, source_dir)
         exports = self._extract_exports(tree)
         purpose = self._extract_purpose(tree)
+        cross_refs = self._extract_cross_refs(tree, source_dir)
 
         return FileNode(
             path=str(abs_path),
@@ -43,12 +45,12 @@ class PythonParser:
             purpose_source="static",
             imports=imports,
             exports=exports,
+            cross_refs=cross_refs,
             lines=len(source_code.splitlines()),
         )
 
-    def _extract_imports(self, tree: ast.AST, source_path: Path) -> list[str]:
+    def _extract_imports(self, tree: ast.AST, source_dir: Path) -> list[str]:
         imports: list[str] = []
-        source_dir = source_path.parent
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -69,18 +71,99 @@ class PythonParser:
 
         return sorted(set(imports))
 
+    def _extract_cross_refs(self, tree: ast.AST, source_dir: Path) -> dict[str, list[str]]:
+        """提取跨文件符号引用：追踪每个 import 的符号在代码中是否被实际使用。
+
+        返回 {relative_path: [symbol1, symbol2, ...]} 的映射。
+        """
+        cross_refs: dict[str, list[str]] = {}
+
+        # Step 1: 建立符号到模块的映射
+        #   symbol_name -> resolved_relative_path
+        symbol_to_module: dict[str, str] = {}
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    resolved = self._resolve_import(alias.name, source_dir)
+                    if resolved:
+                        # import X  -> 使用 X 作为名称
+                        name = alias.asname if alias.asname else alias.name.split(".")[0]
+                        symbol_to_module[name] = resolved
+
+            elif isinstance(node, ast.ImportFrom):
+                if node.module is None:
+                    continue
+                if node.level is not None and node.level > 0:
+                    resolved = self._resolve_relative_import(node.module, node.level, source_dir)
+                else:
+                    resolved = self._resolve_import(node.module, source_dir)
+                if resolved:
+                    for alias in node.names:
+                        if alias.name == "*":
+                            # from X import *  — 无法精确追踪，标记为全部使用
+                            cross_refs[resolved] = cross_refs.get(resolved, []) + ["*"]
+                            continue
+                        name = alias.asname if alias.asname else alias.name
+                        symbol_to_module[name] = resolved
+
+        if not symbol_to_module:
+            return cross_refs
+
+        # Step 2: 遍历代码中所有 Name 节点，收集实际使用的符号
+        used_symbols: set[str] = set()
+        for node in ast.walk(tree):
+            # 跳过导入语句本身中的 Name
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                continue
+            if isinstance(node, ast.Name):
+                used_symbols.add(node.id)
+
+        # 也收集 Attribute 访问（如 module.func）
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute):
+                if isinstance(node.value, ast.Name):
+                    used_symbols.add(node.value.id)
+
+        # Step 3: 将使用的符号映射回模块
+        for symbol, resolved_path in symbol_to_module.items():
+            if symbol in used_symbols:
+                if resolved_path not in cross_refs:
+                    cross_refs[resolved_path] = []
+                if symbol not in cross_refs[resolved_path]:
+                    cross_refs[resolved_path].append(symbol)
+
+        return cross_refs
+
     def _resolve_import(self, module_name: str, source_dir: Path) -> Optional[str]:
         parts = module_name.split(".")
         module_path = "/".join(parts)
-        candidates = [
-            source_dir / f"{module_path}.py",
-            source_dir / module_path / "__init__.py",
-        ]
 
-        for candidate in candidates:
-            resolved = self._to_relative(candidate)
-            if resolved:
-                return resolved
+        search_dirs = [source_dir, self._project_root]
+        for search_dir in search_dirs:
+            candidates = [
+                search_dir / f"{module_path}.py",
+                search_dir / module_path / "__init__.py",
+            ]
+            for candidate in candidates:
+                resolved = self._to_relative(candidate)
+                if resolved:
+                    return resolved
+
+        # Walk up from source_dir to project_root to find the module
+        current = source_dir
+        while current >= self._project_root:
+            candidates = [
+                current / f"{module_path}.py",
+                current / module_path / "__init__.py",
+            ]
+            for candidate in candidates:
+                resolved = self._to_relative(candidate)
+                if resolved:
+                    return resolved
+            if current == self._project_root:
+                break
+            current = current.parent
 
         return None
 

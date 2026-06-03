@@ -54,6 +54,8 @@ class HTMLReporter:
                 "importsCount": len(node.imports),
                 "importedBy": node.imported_by,
                 "importedByCount": len(node.imported_by),
+                "crossRefs": node.cross_refs,
+                "crossRefsCount": sum(len(v) for v in node.cross_refs.values()),
                 "color": layer_colors.get(node.layer, "#adb5bd"),
             })
         return result
@@ -155,6 +157,7 @@ const STATS = {stats_json};
             <div class="stat-card"><div class="num">${{STATS.total_files}}</div><div class="lbl">总文件数</div></div>
             <div class="stat-card"><div class="num">${{STATS.total_lines}}</div><div class="lbl">总代码行</div></div>
             <div class="stat-card"><div class="num">${{STATS.total_imports}}</div><div class="lbl">依赖关系</div></div>
+            <div class="stat-card"><div class="num">${{STATS.total_xrefs}}</div><div class="lbl">符号引用</div></div>
             <div class="stat-card${{cycleClass}}"><div class="num">${{STATS.cycles}}</div><div class="lbl">循环依赖</div></div>
         `;
     }}
@@ -235,7 +238,7 @@ const STATS = {stats_json};
         const tip = document.getElementById("tooltip");
         const inCycle = DATA.cycles && DATA.cycles.some(c => c.includes(d.id));
         const cycleWarn = inCycle ? '<br/><span style="color:#f38ba8">⚠ 存在循环依赖</span>' : '';
-        tip.innerHTML = `<strong>${{d.label}}</strong><br/>${{d.purpose}}${{cycleWarn}}<br/>被 ${{d.importedByCount}} 个文件引用 · 依赖 ${{d.importsCount}} 个文件`;
+        tip.innerHTML = `<strong>${{d.label}}</strong><br/>${{d.purpose}}${{cycleWarn}}<br/>被 ${{d.importedByCount}} 个文件引用 · 依赖 ${{d.importsCount}} 个文件 · 符号引用 ${{d.crossRefsCount || 0}}`;
         tip.style.opacity = "1";
         tip.style.left = (event.pageX + 12) + "px";
         tip.style.top = (event.pageY - 28) + "px";
@@ -269,14 +272,18 @@ const STATS = {stats_json};
         const importedByHtml = d.importedBy && d.importedBy.length > 0
             ? '<p style="margin-top:4px;"><strong>被引用:</strong></p><div class="dep-list">' + d.importedBy.map(i => '<span>' + i + '</span>').join('') + '</div>'
             : '<p style="margin-top:4px;"><strong>被引用:</strong> 无</p>';
+        const crossRefsHtml = d.crossRefs && Object.keys(d.crossRefs).length > 0
+            ? '<p style="margin-top:4px;"><strong>符号引用:</strong></p><div class="dep-list">' + Object.entries(d.crossRefs).map(([k, v]) => '<span>' + k + ' ← ' + (v||[]).join(', ') + '</span>').join('') + '</div>'
+            : '<p style="margin-top:4px;"><strong>符号引用:</strong> 无</p>';
         detail.innerHTML = `
             <h3>${{d.fullPath}}</h3>
             <p>${{cycleWarn}}<span class="tag" style="background:${{d.color}}33;color:${{d.color}}">${{d.layer}}</span>
             <span class="tag" style="background:#45475a">${{d.language}}</span></p>
             <p style="margin-top:8px;"><strong>功能:</strong> ${{d.purpose}}</p>
-            <p><strong>代码行数:</strong> ${{d.lines}} · <strong>被引用:</strong> ${{d.importedByCount}} 次 · <strong>依赖:</strong> ${{d.importsCount}} 个</p>
+            <p><strong>代码行数:</strong> ${{d.lines}} · <strong>被引用:</strong> ${{d.importedByCount}} 次 · <strong>依赖:</strong> ${{d.importsCount}} 个 · <strong>符号引用:</strong> ${{d.crossRefsCount || 0}}</p>
             ${{importsHtml}}
             ${{importedByHtml}}
+            ${{crossRefsHtml}}
         `;
     }}
 
