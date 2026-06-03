@@ -12,10 +12,18 @@ import yaml
 
 from .parser.python_parser import PythonParser
 from .parser.js_parser import JSParser
+from .parser.php_parser import PHParser
+from .parser.java_parser import JavaParser
 from .parser.generic_parser import GenericParser
 from .analyzer.llm_client import LLMAnalyzer
 from .analyzer.incremental_cache import IncrementalCache
 from .analyzer.rule_engine import RuleEngine, RuleResult
+from .analyzer.project_detector import ProjectDetector
+from .analyzer.api_detector import ApiEndpointDetector, build_endpoints_summary
+from .analyzer.db_model_analyzer import DbModelAnalyzer, build_models_summary
+from .analyzer.quality_analyzer import QualityAnalyzer, build_quality_summary
+from .analyzer.git_analyzer import GitAnalyzer
+from .analyzer.security_scanner import SecurityScanner, build_security_summary
 from .graph.dependency_graph import DependencyGraph, FileNode
 from .reporter.json_reporter import JSONReporter
 from .reporter.markdown_reporter import MarkdownReporter
@@ -172,6 +180,8 @@ def run_analysis(config: dict, project_root: str, progress_callback: Callable[[i
     # 创建解析器
     python_parser = PythonParser(str(root))
     js_parser = JSParser(str(root))
+    php_parser = PHParser(str(root))
+    java_parser = JavaParser(str(root))
     generic_parser = GenericParser(str(root))
 
     def parse_single_file(args: tuple[Path, str]) -> tuple[str, Optional[dict], bool]:
@@ -189,6 +199,10 @@ def run_analysis(config: dict, project_root: str, progress_callback: Callable[[i
             node = python_parser.parse_file(str(file_path))
         elif lang in ("javascript", "typescript"):
             node = js_parser.parse_file(str(file_path))
+        elif lang == "php":
+            node = php_parser.parse_file(str(file_path))
+        elif lang == "java":
+            node = java_parser.parse_file(str(file_path))
         else:
             node = generic_parser.parse_file(str(file_path), lang)
 
@@ -229,6 +243,8 @@ def run_analysis(config: dict, project_root: str, progress_callback: Callable[[i
                     imports=node_dict.get("imports", []),
                     exports=node_dict.get("exports", []),
                     cross_refs=node_dict.get("cross_refs", {}),
+                    call_targets=node_dict.get("call_targets", []),
+                    unused_imports=node_dict.get("unused_imports", []),
                     lines=node_dict.get("lines", 0),
                 )
                 graph.add_node(node)
@@ -245,6 +261,8 @@ def run_analysis(config: dict, project_root: str, progress_callback: Callable[[i
                         imports=cached_data.get("imports", []),
                         exports=cached_data.get("exports", []),
                         cross_refs=cached_data.get("cross_refs", {}),
+                        call_targets=cached_data.get("call_targets", []),
+                        unused_imports=cached_data.get("unused_imports", []),
                         lines=cached_data.get("lines", 0),
                     )
                     graph.add_node(node)
@@ -270,6 +288,56 @@ def run_analysis(config: dict, project_root: str, progress_callback: Callable[[i
     graph.detect_cycles()
     graph.detect_layers()
     print("[信息] 依赖关系图构建完成")
+
+    # 项目类型检测
+    print("[信息] 检测项目类型...")
+    detector = ProjectDetector(str(root))
+    proj_info = detector.detect()
+    graph.set_project_info(proj_info.to_dict())
+    print(f"[信息] 项目类型: {proj_info.project_subtype or proj_info.project_type}")
+    if proj_info.frameworks:
+        print(f"[信息] 框架: {', '.join(proj_info.frameworks)}")
+    if proj_info.architecture:
+        print(f"[信息] 架构模式: {proj_info.architecture}")
+
+    # API 端点检测
+    print("[信息] 检测 API 端点...")
+    api_detector = ApiEndpointDetector(str(root))
+    api_endpoints = api_detector.detect(files)
+    graph.set_api_endpoints(build_endpoints_summary(api_endpoints))
+    print(f"[信息] 发现 {len(api_endpoints)} 个 API 端点")
+
+    # 数据库模型分析
+    print("[信息] 分析数据库模型...")
+    db_analyzer = DbModelAnalyzer(str(root))
+    db_models = db_analyzer.analyze(files)
+    graph.set_db_models(build_models_summary(db_models))
+    print(f"[信息] 发现 {len(db_models)} 个数据模型")
+
+    # 代码质量分析
+    print("[信息] 分析代码质量...")
+    quality_analyzer = QualityAnalyzer()
+    quality_files = quality_analyzer.analyze(files)
+    graph.set_quality(build_quality_summary(quality_files))
+    q_summary = graph.quality or {}
+    print(f"[信息] 代码质量评级: {q_summary.get('grade', 'N/A')}")
+
+    # Git 历史分析
+    print("[信息] 分析 Git 历史...")
+    git_analyzer = GitAnalyzer(str(root))
+    graph.set_git_info(git_analyzer.analyze())
+    git_info = graph.git_info or {}
+    if git_info.get("is_git_repo"):
+        print(f"[信息] Git 仓库: {git_info.get('current_branch', '')} ({git_info.get('total_commits', 0)} 次提交)")
+
+    # 安全扫描
+    print("[信息] 执行安全扫描...")
+    security_scanner = SecurityScanner(str(root))
+    security_issues = security_scanner.scan(files)
+    graph.set_security(build_security_summary(security_issues))
+    sec_summary = graph.security or {}
+    print(f"[信息] 发现 {sec_summary.get('total_issues', 0)} 个安全问题")
+
     cycles = graph.get_cycles()
     if cycles:
         print(f"[警告] 发现 {len(cycles)} 个循环依赖")
@@ -330,14 +398,29 @@ def generate_reports(graph: DependencyGraph, config: dict, project_root: str) ->
 
 def print_summary(graph: DependencyGraph) -> None:
     stats = graph.get_stats()
+    proj = graph.project_info
     print()
-    print("=" * 50)
+    print("=" * 60)
     print("  分析完成 - 项目摘要")
-    print("=" * 50)
+    print("=" * 60)
+    if proj.get("display_name"):
+        print(f"  项目名称:   {proj['display_name']}")
+    if proj.get("project_subtype"):
+        print(f"  项目类型:   {proj['project_subtype']}")
+    if proj.get("architecture"):
+        print(f"  架构模式:   {proj['architecture']}")
+    if proj.get("frameworks"):
+        print(f"  框架:       {', '.join(proj['frameworks'])}")
+    if proj.get("databases"):
+        print(f"  数据库:     {', '.join(proj['databases'])}")
+    if proj.get("entry_points"):
+        print(f"  入口点:     {', '.join(proj['entry_points'][:5])}")
+    print("-" * 60)
     print(f"  总文件数:   {stats['total_files']}")
     print(f"  总代码行:   {stats['total_lines']}")
     print(f"  总依赖关系: {stats['total_imports']}")
-    print("=" * 50)
+    print(f"  分层分布:   {stats.get('layers', {})}")
+    print("=" * 60)
 
 
 def print_rule_result(result: RuleResult) -> None:

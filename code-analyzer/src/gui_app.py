@@ -34,7 +34,7 @@ from src.main import (
 class AnalysisWorker(QThread):
     log_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int, int)
-    finished_signal = pyqtSignal(dict, int, int, int, int)
+    finished_signal = pyqtSignal(dict, dict)
     error_signal = pyqtSignal(str)
 
     def __init__(self, project_dir: str, config_file: str, use_llm: bool, gen_html: bool) -> None:
@@ -54,14 +54,21 @@ class AnalysisWorker(QThread):
                 config.setdefault("output", {})["include_html"] = False
 
             graph = run_analysis(config, self._project_dir, progress_callback=self._on_progress)
-            node_count = len(graph.get_all_nodes())
-            total_lines = sum(n.lines for n in graph.get_all_nodes())
-            dep_count = sum(len(n.imports) for n in graph.get_all_nodes())
-            xref_count = sum(len(n.cross_refs) for n in graph.get_all_nodes())
+            graph.detect_cycles()
+            cycles = graph.get_cycles()
+            stats = {
+                "node_count": len(graph.get_all_nodes()),
+                "total_lines": sum(n.lines for n in graph.get_all_nodes()),
+                "dep_count": sum(len(n.imports) for n in graph.get_all_nodes()),
+                "xref_count": sum(len(n.cross_refs) for n in graph.get_all_nodes()),
+                "call_count": sum(len(n.call_targets) for n in graph.get_all_nodes()),
+                "unused_count": sum(len(n.unused_imports) for n in graph.get_all_nodes()),
+                "cycle_count": len(cycles),
+            }
             paths = generate_reports(graph, config, self._project_dir)
 
             self._restore_output()
-            self.finished_signal.emit(paths, node_count, total_lines, dep_count, xref_count)
+            self.finished_signal.emit(paths, stats)
         except Exception as exc:
             self._restore_output()
             self.error_signal.emit(str(exc))
@@ -411,13 +418,27 @@ class AnalyzerPage(QWidget):
             self._progress.setValue(pct)
             self._summary_card.set_status(f"正在分析... {current}/{total}")
 
-    def _on_done(self, paths: dict, node_count: int, total_lines: int, dep_count: int, xref_count: int) -> None:
+    def _on_done(self, paths: dict, stats: dict) -> None:
         self._analyzing = False
         self._analyze_btn.setEnabled(True)
         self._analyze_btn.setText("开始分析")
         self._progress.setVisible(False)
         self._summary_card.set_status("分析完成")
-        self._summary_card.set_stats(f"文件 {node_count}  ·  代码行 {total_lines}  ·  依赖 {dep_count}  ·  引用 {xref_count}")
+
+        node_count = stats["node_count"]
+        total_lines = stats["total_lines"]
+        dep_count = stats["dep_count"]
+        xref_count = stats["xref_count"]
+        call_count = stats["call_count"]
+        unused_count = stats["unused_count"]
+        cycle_count = stats.get("cycle_count", 0)
+
+        self._summary_card.set_stats(
+            f"文件 {node_count}  ·  代码行 {total_lines}  ·  依赖 {dep_count}"
+            f"  ·  引用 {xref_count}  ·  调用 {call_count}"
+            f"{'  ·  未使用导入 ' + str(unused_count) if unused_count > 0 else ''}"
+            f"{'  ·  循环依赖 ' + str(cycle_count) if cycle_count > 0 else ''}"
+        )
 
         self._log_card.append_log("\n" + "─" * 48 + "\n")
         self._log_card.append_log("  分析完成\n")
@@ -426,6 +447,11 @@ class AnalyzerPage(QWidget):
         self._log_card.append_log(f"  代码行数     {total_lines}\n")
         self._log_card.append_log(f"  依赖关系     {dep_count}\n")
         self._log_card.append_log(f"  符号引用     {xref_count}\n")
+        self._log_card.append_log(f"  调用目标     {call_count}\n")
+        if unused_count > 0:
+            self._log_card.append_log(f"  [警告] 未使用导入  {unused_count}\n")
+        if cycle_count > 0:
+            self._log_card.append_log(f"  [警告] 循环依赖    {cycle_count}\n")
         self._log_card.append_log("─" * 48 + "\n")
 
         html_path = paths.get("html", "")
@@ -438,7 +464,14 @@ class AnalyzerPage(QWidget):
             self._output_dir = output_dir
             self._folder_btn.setEnabled(True)
 
-        InfoBar.success("完成", f"成功分析 {node_count} 个文件，发现 {xref_count} 个符号引用", duration=3000, parent=self, position=InfoBarPosition.TOP)
+        InfoBar.success(
+            "完成",
+            f"成功分析 {node_count} 个文件，发现 {xref_count} 个引用、{call_count} 个调用"
+            f"{'、' + str(cycle_count) + ' 个循环依赖' if cycle_count > 0 else ''}",
+            duration=3000,
+            parent=self,
+            position=InfoBarPosition.TOP,
+        )
 
     def _on_error(self, error_msg: str) -> None:
         self._analyzing = False

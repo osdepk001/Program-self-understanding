@@ -325,7 +325,9 @@ class GenericParser:
         imports = self._extract_imports(cleaned, lang, config, abs_path)
         exports = self._extract_exports(cleaned, lang)
         purpose = self._extract_purpose(cleaned, lang)
-        cross_refs = self._extract_cross_refs(cleaned, lang, config, abs_path)
+        cross_refs, call_targets, unused_imports = self._extract_cross_refs_v2(
+            cleaned, lang, config, abs_path, imports
+        )
 
         return FileNode(
             path=str(abs_path),
@@ -336,6 +338,8 @@ class GenericParser:
             imports=imports,
             exports=exports,
             cross_refs=cross_refs,
+            call_targets=call_targets,
+            unused_imports=unused_imports,
             lines=len(source_code.splitlines()),
         )
 
@@ -802,6 +806,193 @@ class GenericParser:
         except (ValueError, OSError):
             pass
         return None
+
+    def _extract_cross_refs_v2(
+        self, source: str, lang: str, config: dict, source_path: Path, imports: list[str]
+    ) -> tuple[dict[str, list[str]], list[dict], list[str]]:
+        """V2 深度分析：符号引用 + 调用目标 + 未使用导入（通用语言）。"""
+        cross_refs: dict[str, list[str]] = {}
+        call_targets: list[dict] = []
+        source_dir = source_path.parent
+
+        symbol_to_module: dict[str, str] = {}
+        all_imported_modules: set[str] = set(imports)
+
+        # Java / Kotlin / Scala / Dart / Groovy / C# - import 语句
+        if lang in ("java", "kotlin", "scala", "groovy", "csharp"):
+            import_pattern = config.get("import_single")
+            if import_pattern:
+                for match in import_pattern.finditer(source):
+                    full_name = match.group(1)
+                    class_name = full_name.split(".")[-1]
+                    resolved = self._resolve_dot_import(full_name, f".{lang}", source_path)
+                    if resolved:
+                        symbol_to_module[class_name] = resolved
+
+        # Rust - use 语句
+        if lang == "rust":
+            use_pattern = config.get("use_import")
+            if use_pattern:
+                for match in use_pattern.finditer(source):
+                    module_path = match.group(1)
+                    # 提取最后一个 :: 之后的类型名
+                    type_name = module_path.split("::")[-1]
+                    if type_name not in ("self", "super", "crate", "*"):
+                        resolved = self._resolve_rust_import(module_path, source_path)
+                        if resolved:
+                            symbol_to_module[type_name] = resolved
+
+        # Go - import 语句
+        if lang == "go":
+            for match in config["single_import"].finditer(source):
+                module = match.group(1)
+                resolved = self._resolve_go_import(module, source_path)
+                if resolved:
+                    pkg_name = module.split("/")[-1]
+                    symbol_to_module[pkg_name] = resolved
+            for match in config["multi_import"].finditer(source):
+                block = match.group(1)
+                for inner in config["inner_import"].finditer(block):
+                    module = inner.group(1)
+                    resolved = self._resolve_go_import(module, source_path)
+                    if resolved:
+                        pkg_name = module.split("/")[-1]
+                        symbol_to_module[pkg_name] = resolved
+
+        # PHP - use 语句
+        if lang == "php":
+            use_pattern = config.get("use_namespace")
+            if use_pattern:
+                for match in use_pattern.finditer(source):
+                    full_name = match.group(1)
+                    class_name = full_name.split("\\")[-1]
+                    resolved = self._resolve_php_use(full_name, source_path)
+                    if resolved:
+                        symbol_to_module[class_name] = resolved
+
+        if not symbol_to_module:
+            return cross_refs, call_targets, []
+
+        # Step 2: 检查符号使用 + 构建 call_targets
+        lines = source.split("\n")
+        for symbol, resolved_path in symbol_to_module.items():
+            usage_pattern = re.compile(r'\b' + re.escape(symbol) + r'\b')
+            exclude_line = re.compile(
+                r'^\s*(?:import|using|require|include|use|package)\s'
+            )
+            found = False
+            for line in lines:
+                if not exclude_line.match(line):
+                    if usage_pattern.search(line):
+                        found = True
+                        break
+            if found:
+                if resolved_path not in cross_refs:
+                    cross_refs[resolved_path] = []
+                if symbol not in cross_refs[resolved_path]:
+                    cross_refs[resolved_path].append(symbol)
+
+                # 构建 call_targets: 追踪 Symbol.method(...)
+                call_pattern = re.compile(
+                    r'\b' + re.escape(symbol) + r'\.(\w+)\s*\(',
+                    re.MULTILINE,
+                )
+                for match in call_pattern.finditer(source):
+                    method_name = match.group(1)
+                    call_targets.append({
+                        "file": resolved_path,
+                        "symbol": method_name,
+                        "kind": "call",
+                        "context": f"{symbol}.{method_name}()",
+                    })
+
+                # new Symbol(...) 调用
+                new_pattern = re.compile(
+                    r'\bnew\s+' + re.escape(symbol) + r'\s*\(',
+                    re.MULTILINE,
+                )
+                for match in new_pattern.finditer(source):
+                    call_targets.append({
+                        "file": resolved_path,
+                        "symbol": symbol,
+                        "kind": "instantiate",
+                        "context": f"new {symbol}()",
+                    })
+
+                # 追踪直接调用: Symbol.method(...) 和直接调用 Symbol(...)
+                direct_call_pattern = re.compile(
+                    r'\b' + re.escape(symbol) + r'\s*\(',
+                    re.MULTILINE,
+                )
+                for line in lines:
+                    if not exclude_line.match(line):
+                        for dmatch in direct_call_pattern.finditer(line):
+                            call_targets.append({
+                                "file": resolved_path,
+                                "symbol": symbol,
+                                "kind": "call",
+                                "context": f"{symbol}()",
+                            })
+
+                # Java/C# - extends 追踪
+                extends_pattern = re.compile(
+                    r'\bextends\s+' + re.escape(symbol) + r'\b',
+                    re.MULTILINE,
+                )
+                for match in extends_pattern.finditer(source):
+                    call_targets.append({
+                        "file": resolved_path,
+                        "symbol": symbol,
+                        "kind": "extends",
+                        "context": f"extends {symbol}",
+                    })
+
+                # Java - implements 追踪
+                implements_pattern = re.compile(
+                    r'\bimplements\s+[\w\s,<>]*\b' + re.escape(symbol) + r'\b',
+                    re.MULTILINE,
+                )
+                for match in implements_pattern.finditer(source):
+                    call_targets.append({
+                        "file": resolved_path,
+                        "symbol": symbol,
+                        "kind": "implements",
+                        "context": f"implements {symbol}",
+                    })
+
+                # Rust - :: 调用追踪
+                rust_call_pattern = re.compile(
+                    r'\b' + re.escape(symbol) + r'::(\w+)\s*\(',
+                    re.MULTILINE,
+                )
+                for match in rust_call_pattern.finditer(source):
+                    method_name = match.group(1)
+                    call_targets.append({
+                        "file": resolved_path,
+                        "symbol": method_name,
+                        "kind": "call",
+                        "context": f"{symbol}::{method_name}()",
+                    })
+
+                # Rust - ::Struct 实例化
+                rust_new_pattern = re.compile(
+                    r'\b' + re.escape(symbol) + r'::(\w+)\s*\{',
+                    re.MULTILINE,
+                )
+                for match in rust_new_pattern.finditer(source):
+                    struct_name = match.group(1)
+                    call_targets.append({
+                        "file": resolved_path,
+                        "symbol": struct_name,
+                        "kind": "instantiate",
+                        "context": f"{symbol}::{struct_name}{{}}",
+                    })
+
+        # Step 5: 检测未使用的导入
+        used_modules: set[str] = set(cross_refs.keys())
+        unused_imports = sorted(all_imported_modules - used_modules)
+
+        return cross_refs, call_targets, unused_imports
 
     def _extract_cross_refs(self, source: str, lang: str, config: dict, source_path: Path) -> dict[str, list[str]]:
         """提取跨文件符号引用：追踪非 Python/JS 语言的符号使用。"""

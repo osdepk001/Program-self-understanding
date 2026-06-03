@@ -82,7 +82,9 @@ class JSParser:
         imports = self._extract_imports(cleaned, abs_path)
         exports = self._extract_exports(cleaned)
         purpose = self._extract_purpose(cleaned)
-        cross_refs = self._extract_cross_refs(cleaned, abs_path)
+        cross_refs, call_targets, unused_imports = self._extract_cross_refs_v2(
+            cleaned, abs_path, imports
+        )
 
         return FileNode(
             path=str(abs_path),
@@ -93,6 +95,8 @@ class JSParser:
             imports=imports,
             exports=exports,
             cross_refs=cross_refs,
+            call_targets=call_targets,
+            unused_imports=unused_imports,
             lines=len(source_code.splitlines()),
         )
 
@@ -110,6 +114,164 @@ class JSParser:
                     imports.append(resolved)
 
         return sorted(set(imports))
+
+    def _extract_cross_refs_v2(
+        self, source: str, source_path: Path, imports: list[str]
+    ) -> tuple[dict[str, list[str]], list[dict], list[str]]:
+        """V2 深度分析：符号引用 + 调用目标 + 未使用导入。"""
+        cross_refs: dict[str, list[str]] = {}
+        call_targets: list[dict] = []
+        source_dir = source_path.parent
+
+        symbol_to_module: dict[str, str] = {}
+        all_imported_modules: set[str] = set(imports)
+
+        # 处理 named imports: import { A, B } from './x'
+        for match in self.NAMED_IMPORT_RE.finditer(source):
+            names_str = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                for name_part in names_str.split(","):
+                    name_part = name_part.strip()
+                    if " as " in name_part:
+                        _, alias = name_part.split(" as ", 1)
+                        symbol_to_module[alias.strip()] = resolved
+                    else:
+                        symbol_to_module[name_part] = resolved
+
+        # 处理 star imports: import * as X from './x'
+        for match in self.STAR_IMPORT_RE.finditer(source):
+            name = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                symbol_to_module[name] = resolved
+
+        # 处理 default imports: import X from './x'
+        for match in self.DEFAULT_IMPORT_RE.finditer(source):
+            name = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                symbol_to_module[name] = resolved
+
+        # 处理 require named: const { A, B } = require('./x')
+        for match in self.REQUIRE_NAMED_RE.finditer(source):
+            names_str = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                for name_part in names_str.split(","):
+                    name_part = name_part.strip()
+                    if ":" in name_part:
+                        orig, _ = name_part.split(":", 1)
+                        symbol_to_module[orig.strip()] = resolved
+                    elif " as " in name_part:
+                        _, alias = name_part.split(" as ", 1)
+                        symbol_to_module[alias.strip()] = resolved
+                    else:
+                        symbol_to_module[name_part] = resolved
+
+        # 处理 require default: const X = require('./x')
+        for match in self.REQUIRE_DEFAULT_RE.finditer(source):
+            name = match.group(1)
+            module_spec = match.group(2)
+            resolved = self._resolve_js_import(module_spec, source_dir)
+            if resolved:
+                symbol_to_module[name] = resolved
+
+        if not symbol_to_module:
+            return cross_refs, call_targets, []
+
+        # Step 2: 检查符号使用 + 构建 call_targets
+        lines = source.split("\n")
+        for symbol, resolved_path in symbol_to_module.items():
+            # 基本符号引用
+            usage_pattern = re.compile(r'\b' + re.escape(symbol) + r'\b')
+            found = False
+            found_in_lines: list[int] = []
+            for i, line in enumerate(lines):
+                if not re.match(r'^\s*(?:import|export|const|let|var)\s', line):
+                    if usage_pattern.search(line):
+                        found = True
+                        found_in_lines.append(i)
+                        break
+            if found:
+                if resolved_path not in cross_refs:
+                    cross_refs[resolved_path] = []
+                if symbol not in cross_refs[resolved_path]:
+                    cross_refs[resolved_path].append(symbol)
+
+                # 构建 call_targets: 追踪 X.func(), X.prop, new X() 等
+                call_pattern = re.compile(
+                    r'\b' + re.escape(symbol) + r'\.(\w+)\s*\(',
+                    re.MULTILINE,
+                )
+                for match in call_pattern.finditer(source):
+                    method_name = match.group(1)
+                    call_targets.append({
+                        "file": resolved_path,
+                        "symbol": method_name,
+                        "kind": "call",
+                        "context": f"{symbol}.{method_name}()",
+                    })
+
+                # 追踪属性访问: X.prop
+                attr_pattern = re.compile(
+                    r'\b' + re.escape(symbol) + r'\.(\w+)(?!\s*\()',
+                    re.MULTILINE,
+                )
+                for match in attr_pattern.finditer(source):
+                    # 排除已在 call_targets 中记录的
+                    attr_name = match.group(1)
+                    already_in_calls = any(
+                        c["symbol"] == attr_name and c["file"] == resolved_path
+                        for c in call_targets
+                    )
+                    if not already_in_calls:
+                        kind = "class_usage" if attr_name and attr_name[0].isupper() else "attribute"
+                        call_targets.append({
+                            "file": resolved_path,
+                            "symbol": attr_name,
+                            "kind": kind,
+                            "context": f"{symbol}.{attr_name}",
+                        })
+
+                # 追踪直接调用: symbol()（from X import Y 风格）
+                direct_call_pattern = re.compile(
+                    r'\b' + re.escape(symbol) + r'\s*\(',
+                    re.MULTILINE,
+                )
+                # 排除 import/require 行
+                for line in lines:
+                    if not re.match(r'^\s*(?:import|export|const|let|var)\s', line):
+                        for dmatch in direct_call_pattern.finditer(line):
+                            call_targets.append({
+                                "file": resolved_path,
+                                "symbol": symbol,
+                                "kind": "call",
+                                "context": f"{symbol}()",
+                            })
+
+                # 追踪 new Symbol(...)
+                new_pattern = re.compile(
+                    r'\bnew\s+' + re.escape(symbol) + r'\s*\(',
+                    re.MULTILINE,
+                )
+                for match in new_pattern.finditer(source):
+                    call_targets.append({
+                        "file": resolved_path,
+                        "symbol": symbol,
+                        "kind": "instantiate",
+                        "context": f"new {symbol}()",
+                    })
+
+        # Step 5: 检测未使用的导入
+        used_modules: set[str] = set(cross_refs.keys())
+        unused_imports = sorted(all_imported_modules - used_modules)
+
+        return cross_refs, call_targets, unused_imports
 
     def _extract_cross_refs(self, source: str, source_path: Path) -> dict[str, list[str]]:
         """提取跨文件符号引用：追踪 JS/TS import 的符号在代码中是否被实际使用。"""

@@ -1,27 +1,27 @@
 {
   "hashes": {
-    "E:\\Program self-understanding\\code-analyzer\\src\\main.py": "b6ca31a358a23e2a82c0cb1cbb84b3ca08ac00deba5033d0f5f56221f9cfeaac",
+    "E:\\Program self-understanding\\code-analyzer\\src\\main.py": "f10189f483e33a3c5b8b27d593f80c5666780f5e82911c0684be592085218cb1",
     "E:\\Program self-understanding\\code-analyzer\\src\\__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\incremental_cache.py": "505fe6af560c00f6b91689e26dc700f4e6d1b7d6c7955fd2caf51ac43befac4e",
     "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\llm_client.py": "0f10b67b68b37a1381778f2f059698cdc2aa3591d9eea0134926a649fc8bee8d",
     "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "E:\\Program self-understanding\\code-analyzer\\src\\graph\\dependency_graph.py": "ec6f289cb2222e59952ad88afc08cb7dda5f10a8cc6cf7c7954287903d6e2699",
+    "E:\\Program self-understanding\\code-analyzer\\src\\graph\\dependency_graph.py": "92ba34585bbcf8ef539e841e5beb7770bcf6f69b56ba058ec7bf5ccbc66b527b",
     "E:\\Program self-understanding\\code-analyzer\\src\\graph\\__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "E:\\Program self-understanding\\code-analyzer\\src\\parser\\js_parser.py": "bb9b6dec378a3ea3d7fe5d4611bd61d0f533404a9f0008d52e83b009500e9ee7",
-    "E:\\Program self-understanding\\code-analyzer\\src\\parser\\python_parser.py": "6432fff63fed64d387d3055a8584b1cc676d0c52ab41c7cb4f6755822c62c81e",
+    "E:\\Program self-understanding\\code-analyzer\\src\\parser\\js_parser.py": "ac4ab6152962ab809c7128ca5d5052269642f5479524471f76236bd0a8ef20b9",
+    "E:\\Program self-understanding\\code-analyzer\\src\\parser\\python_parser.py": "4bf159e4ab2f2cc766551e6f419c59847d65c172126f7a34cc3f9cc5bacdeccf",
     "E:\\Program self-understanding\\code-analyzer\\src\\parser\\__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\html_reporter.py": "8c48a17939da11f99f7052f479c979b04eb11285c5be72c8e9384dc027670913",
+    "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\html_reporter.py": "11d34350e58eef5dd7d4ec185dbc63a42f322a18adfea657f3173f1a720d1a31",
     "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\json_reporter.py": "cb5d1390954f2a4302d9c3b4b1386f5f9c99bf21132cc45699e26d29f284826f",
     "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\markdown_reporter.py": "175478536395dc44a4b57f1969637f46dfd599ba770fe10d87eefffbcc63f4e5",
     "E:\\Program self-understanding\\code-analyzer\\src\\reporter\\__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "E:\\Program self-understanding\\code-analyzer\\src\\parser\\generic_parser.py": "14f9cb838c93b7400a197de8cb8a827484d48a931b418ca6b2df2ffb1cbfb264",
+    "E:\\Program self-understanding\\code-analyzer\\src\\parser\\generic_parser.py": "8ed2f2c13b9a2e5d9eb052506ecd685ed9bc5ddb9a68432077a1da937b5faaf7",
     "E:\\Program self-understanding\\code-analyzer\\tests\\fixtures\\go\\server.go": "ae68e8eed88d593c68f6d326dbad414a8ca98d96f5fde42b94b2acd07395c5b0",
     "E:\\Program self-understanding\\code-analyzer\\tests\\fixtures\\java\\Application.java": "eddb404023e34fed4d54e3d080733dd73a32537b29565f281c56f8078ec66522",
     "E:\\Program self-understanding\\code-analyzer\\tests\\fixtures\\rust\\app.rs": "e0ee7051cbb4598060d170de8508b5f143f84ebc9da26bf995fd80e09f7adff0",
     "E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\rule_engine.py": "31164ce9053394b10c9cca443020cabdf48508cf0e77e1990de3a0688803fda2",
     "E:\\Program self-understanding\\code-analyzer\\run.py": "bd1fffc0f1b26e230ef63ff9330351f508c19b8f9abd3a0473056c251ed2d6c5",
     "E:\\Program self-understanding\\code-analyzer\\run_gui.py": "ae6314b9a897eccea4d22f740b655e739e87584119641702ce472e6a3cc57b8a",
-    "E:\\Program self-understanding\\code-analyzer\\src\\gui_app.py": "9c813f33701f27877878182ce75e38ccbbcb9ce434695b033a826be13a9f85cc"
+    "E:\\Program self-understanding\\code-analyzer\\src\\gui_app.py": "aee04b9bf188a71a147a157935a319d159fb07ebf0b7769b5911d38b30894b6d"
   },
   "nodes": {
     "src/main.py": {
@@ -54,7 +54,43 @@
         "fn:print_rule_result",
         "fn:main"
       ],
-      "lines": 331,
+      "cross_refs": {
+        "src/parser/python_parser.py": [
+          "PythonParser"
+        ],
+        "src/parser/js_parser.py": [
+          "JSParser"
+        ],
+        "src/parser/generic_parser.py": [
+          "GenericParser"
+        ],
+        "src/analyzer/llm_client.py": [
+          "LLMAnalyzer"
+        ],
+        "src/analyzer/incremental_cache.py": [
+          "IncrementalCache"
+        ],
+        "src/analyzer/rule_engine.py": [
+          "RuleEngine",
+          "RuleResult"
+        ],
+        "src/graph/dependency_graph.py": [
+          "DependencyGraph",
+          "FileNode"
+        ],
+        "src/reporter/json_reporter.py": [
+          "JSONReporter"
+        ],
+        "src/reporter/markdown_reporter.py": [
+          "MarkdownReporter"
+        ],
+        "src/reporter/html_reporter.py": [
+          "HTMLReporter"
+        ]
+      },
+      "call_targets": [],
+      "unused_imports": [],
+      "lines": 423,
       "layer": ""
     },
     "src/__init__.py": {
@@ -125,7 +161,10 @@
         "class:FileNode",
         "class:DependencyGraph"
       ],
-      "lines": 162,
+      "cross_refs": {},
+      "call_targets": [],
+      "unused_imports": [],
+      "lines": 177,
       "layer": ""
     },
     "src/graph/__init__.py": {
@@ -153,7 +192,21 @@
       "exports": [
         "class:JSParser"
       ],
-      "lines": 171,
+      "cross_refs": {
+        "src/graph/dependency_graph.py": [
+          "FileNode"
+        ]
+      },
+      "call_targets": [
+        {
+          "file": "src/graph/dependency_graph.py",
+          "symbol": "FileNode",
+          "kind": "call",
+          "context": "FileNode()"
+        }
+      ],
+      "unused_imports": [],
+      "lines": 445,
       "layer": ""
     },
     "src/parser/python_parser.py": {
@@ -169,7 +222,21 @@
       "exports": [
         "class:PythonParser"
       ],
-      "lines": 158,
+      "cross_refs": {
+        "src/graph/dependency_graph.py": [
+          "FileNode"
+        ]
+      },
+      "call_targets": [
+        {
+          "file": "src/graph/dependency_graph.py",
+          "symbol": "FileNode",
+          "kind": "call",
+          "context": "FileNode()"
+        }
+      ],
+      "unused_imports": [],
+      "lines": 388,
       "layer": ""
     },
     "src/parser/__init__.py": {
@@ -197,7 +264,14 @@
       "exports": [
         "class:HTMLReporter"
       ],
-      "lines": 394,
+      "cross_refs": {
+        "src/graph/dependency_graph.py": [
+          "DependencyGraph"
+        ]
+      },
+      "call_targets": [],
+      "unused_imports": [],
+      "lines": 415,
       "layer": ""
     },
     "src/reporter/json_reporter.py": {
@@ -260,7 +334,21 @@
         "var:COMMENT_PATTERN",
         "class:GenericParser"
       ],
-      "lines": 228,
+      "cross_refs": {
+        "src/graph/dependency_graph.py": [
+          "FileNode"
+        ]
+      },
+      "call_targets": [
+        {
+          "file": "src/graph/dependency_graph.py",
+          "symbol": "FileNode",
+          "kind": "call",
+          "context": "FileNode()"
+        }
+      ],
+      "unused_imports": [],
+      "lines": 1035,
       "layer": ""
     },
     "tests/fixtures/go/server.go": {
@@ -366,16 +454,33 @@
       "path": "E:\\Program self-understanding\\code-analyzer\\src\\gui_app.py",
       "relative_path": "src/gui_app.py",
       "language": "python",
-      "purpose": "定义类: RedirectText, AnalyzerGUI",
+      "purpose": "定义类: AnalysisWorker, ConfigCard, LogCard ...",
       "purpose_source": "static",
-      "imports": [],
+      "imports": [
+        "src/main.py"
+      ],
       "imported_by": [],
       "exports": [
-        "class:RedirectText",
-        "class:AnalyzerGUI",
+        "class:AnalysisWorker",
+        "class:ConfigCard",
+        "class:LogCard",
+        "class:SummaryCard",
+        "class:AnalyzerPage",
+        "class:SettingsPage",
+        "class:AboutPage",
+        "class:MainWindow",
         "fn:main"
       ],
-      "lines": 281,
+      "cross_refs": {
+        "src/main.py": [
+          "load_config",
+          "run_analysis",
+          "generate_reports"
+        ]
+      },
+      "call_targets": [],
+      "unused_imports": [],
+      "lines": 685,
       "layer": ""
     }
   }

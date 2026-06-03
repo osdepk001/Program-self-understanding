@@ -6670,6 +6670,18 @@
   ('src.analyzer',
    'E:\\Program self-understanding\\code-analyzer\\src\\analyzer\\__init__.py',
    'PYMODULE'),
+  ('src.analyzer.api_detector',
+   'E:\\Program '
+   'self-understanding\\code-analyzer\\src\\analyzer\\api_detector.py',
+   'PYMODULE'),
+  ('src.analyzer.db_model_analyzer',
+   'E:\\Program '
+   'self-understanding\\code-analyzer\\src\\analyzer\\db_model_analyzer.py',
+   'PYMODULE'),
+  ('src.analyzer.git_analyzer',
+   'E:\\Program '
+   'self-understanding\\code-analyzer\\src\\analyzer\\git_analyzer.py',
+   'PYMODULE'),
   ('src.analyzer.incremental_cache',
    'E:\\Program '
    'self-understanding\\code-analyzer\\src\\analyzer\\incremental_cache.py',
@@ -6678,9 +6690,21 @@
    'E:\\Program '
    'self-understanding\\code-analyzer\\src\\analyzer\\llm_client.py',
    'PYMODULE'),
+  ('src.analyzer.project_detector',
+   'E:\\Program '
+   'self-understanding\\code-analyzer\\src\\analyzer\\project_detector.py',
+   'PYMODULE'),
+  ('src.analyzer.quality_analyzer',
+   'E:\\Program '
+   'self-understanding\\code-analyzer\\src\\analyzer\\quality_analyzer.py',
+   'PYMODULE'),
   ('src.analyzer.rule_engine',
    'E:\\Program '
    'self-understanding\\code-analyzer\\src\\analyzer\\rule_engine.py',
+   'PYMODULE'),
+  ('src.analyzer.security_scanner',
+   'E:\\Program '
+   'self-understanding\\code-analyzer\\src\\analyzer\\security_scanner.py',
    'PYMODULE'),
   ('src.graph',
    'E:\\Program self-understanding\\code-analyzer\\src\\graph\\__init__.py',
@@ -6702,8 +6726,14 @@
    'E:\\Program '
    'self-understanding\\code-analyzer\\src\\parser\\generic_parser.py',
    'PYMODULE'),
+  ('src.parser.java_parser',
+   'E:\\Program self-understanding\\code-analyzer\\src\\parser\\java_parser.py',
+   'PYMODULE'),
   ('src.parser.js_parser',
    'E:\\Program self-understanding\\code-analyzer\\src\\parser\\js_parser.py',
+   'PYMODULE'),
+  ('src.parser.php_parser',
+   'E:\\Program self-understanding\\code-analyzer\\src\\parser\\php_parser.py',
    'PYMODULE'),
   ('src.parser.python_parser',
    'E:\\Program '
